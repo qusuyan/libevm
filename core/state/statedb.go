@@ -19,7 +19,9 @@ package state
 
 import (
 	"fmt"
+	golog "log"
 	"maps"
+	"runtime/debug"
 	"sort"
 	"time"
 
@@ -142,10 +144,15 @@ type StateDB struct {
 
 	// Testing hooks
 	onCommit func(states *triestate.Set) // Hook invoked when commit is performed
+
+	// op log
+	opLogger *golog.Logger
 }
 
 // New creates a new state from a given trie.
 func New(root common.Hash, db Database, snaps SnapshotTree) (*StateDB, error) {
+	fmt.Println("StateDB without logger ====================")
+	debug.PrintStack()
 	snaps = clearTypedNilPointer(snaps)
 	tr, err := db.OpenTrie(root)
 	if err != nil {
@@ -170,6 +177,40 @@ func New(root common.Hash, db Database, snaps SnapshotTree) (*StateDB, error) {
 		accessList:           newAccessList(),
 		transientStorage:     newTransientStorage(),
 		hasher:               crypto.NewKeccakState(),
+	}
+	if sdb.snaps != nil {
+		sdb.snap = sdb.snaps.Snapshot(root)
+	}
+	return sdb, nil
+}
+
+// New creates a new state from a given trie.
+func NewWithLogger(root common.Hash, db Database, snaps SnapshotTree, logger *golog.Logger) (*StateDB, error) {
+	snaps = clearTypedNilPointer(snaps)
+	tr, err := db.OpenTrie(root)
+	if err != nil {
+		return nil, err
+	}
+	sdb := &StateDB{
+		db:                   db,
+		trie:                 tr,
+		originalRoot:         root,
+		snaps:                snaps,
+		accounts:             make(map[common.Hash][]byte),
+		storages:             make(map[common.Hash]map[common.Hash][]byte),
+		accountsOrigin:       make(map[common.Address][]byte),
+		storagesOrigin:       make(map[common.Address]map[common.Hash][]byte),
+		stateObjects:         make(map[common.Address]*stateObject),
+		stateObjectsPending:  make(map[common.Address]struct{}),
+		stateObjectsDirty:    make(map[common.Address]struct{}),
+		stateObjectsDestruct: make(map[common.Address]*types.StateAccount),
+		logs:                 make(map[common.Hash][]*types.Log),
+		preimages:            make(map[common.Hash][]byte),
+		journal:              newJournal(),
+		accessList:           newAccessList(),
+		transientStorage:     newTransientStorage(),
+		hasher:               crypto.NewKeccakState(),
+		opLogger:             logger,
 	}
 	if sdb.snaps != nil {
 		sdb.snap = sdb.snaps.Snapshot(root)
@@ -274,18 +315,21 @@ func (s *StateDB) SubRefund(gas uint64) {
 // Exist reports whether the given account address exists in the state.
 // Notably this also returns true for self-destructed accounts.
 func (s *StateDB) Exist(addr common.Address) bool {
+	s.opLogger.Printf("%x,Exist,%x", s.txIndex, addr)
 	return s.getStateObject(addr) != nil
 }
 
 // Empty returns whether the state object is either non-existent
 // or empty according to the EIP161 specification (balance = nonce = code = 0)
 func (s *StateDB) Empty(addr common.Address) bool {
+	s.opLogger.Printf("%x,Empty,%x", s.txIndex, addr)
 	so := s.getStateObject(addr)
 	return so == nil || so.empty()
 }
 
 // GetBalance retrieves the balance from the given address or 0 if object not found
 func (s *StateDB) GetBalance(addr common.Address) *uint256.Int {
+	s.opLogger.Printf("%x,GetBalance,%x", s.txIndex, addr)
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
 		return stateObject.Balance()
@@ -295,6 +339,7 @@ func (s *StateDB) GetBalance(addr common.Address) *uint256.Int {
 
 // GetNonce retrieves the nonce from the given address or 0 if object not found
 func (s *StateDB) GetNonce(addr common.Address) uint64 {
+	s.opLogger.Printf("%x,GetNonce,%x", s.txIndex, addr)
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
 		return stateObject.Nonce()
@@ -306,6 +351,7 @@ func (s *StateDB) GetNonce(addr common.Address) uint64 {
 // GetStorageRoot retrieves the storage root from the given address or empty
 // if object not found.
 func (s *StateDB) GetStorageRoot(addr common.Address) common.Hash {
+	s.opLogger.Printf("%x,GetStorageRoot,%x", s.txIndex, addr)
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
 		return stateObject.Root()
@@ -319,6 +365,7 @@ func (s *StateDB) TxIndex() int {
 }
 
 func (s *StateDB) GetCode(addr common.Address) []byte {
+	s.opLogger.Printf("%x,GetCode,%x", s.txIndex, addr)
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
 		return stateObject.Code()
@@ -327,6 +374,7 @@ func (s *StateDB) GetCode(addr common.Address) []byte {
 }
 
 func (s *StateDB) GetCodeSize(addr common.Address) int {
+	s.opLogger.Printf("%x,GetCodeSize,%x", s.txIndex, addr)
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
 		return stateObject.CodeSize()
@@ -335,6 +383,7 @@ func (s *StateDB) GetCodeSize(addr common.Address) int {
 }
 
 func (s *StateDB) GetCodeHash(addr common.Address) common.Hash {
+	s.opLogger.Printf("%x,GetCodeHash,%x", s.txIndex, addr)
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
 		return common.BytesToHash(stateObject.CodeHash())
@@ -344,6 +393,7 @@ func (s *StateDB) GetCodeHash(addr common.Address) common.Hash {
 
 // GetState retrieves a value from the given account's storage trie.
 func (s *StateDB) GetState(addr common.Address, hash common.Hash, opts ...stateconf.StateDBStateOption) common.Hash {
+	s.opLogger.Printf("%x,GetState,%x,%x", s.txIndex, addr, hash)
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
 		hash = transformStateKey(addr, hash, opts...)
@@ -354,6 +404,7 @@ func (s *StateDB) GetState(addr common.Address, hash common.Hash, opts ...statec
 
 // GetCommittedState retrieves a value from the given account's committed storage trie.
 func (s *StateDB) GetCommittedState(addr common.Address, hash common.Hash, opts ...stateconf.StateDBStateOption) common.Hash {
+	s.opLogger.Printf("%x,GetCommittedState,%x,%x", s.txIndex, addr, hash)
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
 		hash = transformStateKey(addr, hash, opts...)
@@ -368,6 +419,7 @@ func (s *StateDB) Database() Database {
 }
 
 func (s *StateDB) HasSelfDestructed(addr common.Address) bool {
+	s.opLogger.Printf("%x,HasSelfDestructed,%x", s.txIndex, addr)
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
 		return stateObject.selfDestructed
@@ -381,6 +433,7 @@ func (s *StateDB) HasSelfDestructed(addr common.Address) bool {
 
 // AddBalance adds amount to the account associated with addr.
 func (s *StateDB) AddBalance(addr common.Address, amount *uint256.Int) {
+	s.opLogger.Printf("%x,AddBalance,%x", s.txIndex, addr)
 	stateObject := s.getOrNewStateObject(addr)
 	if stateObject != nil {
 		stateObject.AddBalance(amount)
@@ -389,6 +442,7 @@ func (s *StateDB) AddBalance(addr common.Address, amount *uint256.Int) {
 
 // SubBalance subtracts amount from the account associated with addr.
 func (s *StateDB) SubBalance(addr common.Address, amount *uint256.Int) {
+	s.opLogger.Printf("%x,SubBalance,%x", s.txIndex, addr)
 	stateObject := s.getOrNewStateObject(addr)
 	if stateObject != nil {
 		stateObject.SubBalance(amount)
@@ -396,6 +450,7 @@ func (s *StateDB) SubBalance(addr common.Address, amount *uint256.Int) {
 }
 
 func (s *StateDB) SetBalance(addr common.Address, amount *uint256.Int) {
+	s.opLogger.Printf("%x,SetBalance,%x", s.txIndex, addr)
 	stateObject := s.getOrNewStateObject(addr)
 	if stateObject != nil {
 		stateObject.SetBalance(amount)
@@ -403,6 +458,7 @@ func (s *StateDB) SetBalance(addr common.Address, amount *uint256.Int) {
 }
 
 func (s *StateDB) SetNonce(addr common.Address, nonce uint64) {
+	s.opLogger.Printf("%x,SetNonce,%x", s.txIndex, addr)
 	stateObject := s.getOrNewStateObject(addr)
 	if stateObject != nil {
 		stateObject.SetNonce(nonce)
@@ -410,6 +466,7 @@ func (s *StateDB) SetNonce(addr common.Address, nonce uint64) {
 }
 
 func (s *StateDB) SetCode(addr common.Address, code []byte) {
+	s.opLogger.Printf("%x,SetCode,%x", s.txIndex, addr)
 	stateObject := s.getOrNewStateObject(addr)
 	if stateObject != nil {
 		stateObject.SetCode(crypto.Keccak256Hash(code), code)
@@ -417,6 +474,7 @@ func (s *StateDB) SetCode(addr common.Address, code []byte) {
 }
 
 func (s *StateDB) SetState(addr common.Address, key, value common.Hash, opts ...stateconf.StateDBStateOption) {
+	s.opLogger.Printf("%x,SetState,%x,%x", s.txIndex, addr, key)
 	stateObject := s.getOrNewStateObject(addr)
 	if stateObject != nil {
 		key = transformStateKey(addr, key, opts...)
@@ -436,6 +494,7 @@ func (s *StateDB) SetStorage(addr common.Address, storage map[common.Hash]common
 	//
 	// TODO(rjl493456442) this function should only be supported by 'unwritable'
 	// state and all mutations made should all be discarded afterwards.
+	s.opLogger.Printf("%x,SetStorage,%x", s.txIndex, addr)
 	if _, ok := s.stateObjectsDestruct[addr]; !ok {
 		s.stateObjectsDestruct[addr] = nil
 	}
@@ -451,6 +510,7 @@ func (s *StateDB) SetStorage(addr common.Address, storage map[common.Hash]common
 // The account's state object is still available until the state is committed,
 // getStateObject will return a non-nil account after SelfDestruct.
 func (s *StateDB) SelfDestruct(addr common.Address) {
+	s.opLogger.Printf("%x,SelfDestruct,%x", s.txIndex, addr)
 	stateObject := s.getStateObject(addr)
 	if stateObject == nil {
 		return
@@ -465,6 +525,7 @@ func (s *StateDB) SelfDestruct(addr common.Address) {
 }
 
 func (s *StateDB) Selfdestruct6780(addr common.Address) {
+	s.opLogger.Printf("%x,Selfdestruct6780,%x", s.txIndex, addr)
 	stateObject := s.getStateObject(addr)
 	if stateObject == nil {
 		return
