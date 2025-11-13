@@ -21,6 +21,7 @@ import (
 	"fmt"
 	golog "log"
 	"maps"
+	"math/big"
 	"runtime/debug"
 	"sort"
 	"time"
@@ -337,6 +338,28 @@ func (s *StateDB) GetBalance(addr common.Address) *uint256.Int {
 	return common.U2560
 }
 
+// CheckEnoughBalance checks whether there are enough funds in the address' account to make a transfer.
+func (s *StateDB) CheckEnoughBalance(addr common.Address, amount *uint256.Int) bool {
+	s.opLogger.Printf("%x,CheckEnoughBalance,%x,%d", s.txIndex, addr, amount)
+	stateObject := s.getStateObject(addr)
+	balance := common.U2560
+	if stateObject != nil {
+		balance = stateObject.Balance()
+	}
+	return balance.Cmp(amount) >= 0
+}
+
+// CheckEnoughBalance checks whether there are enough funds in the address' account to make a transfer.
+func (s *StateDB) CheckEnoughBalanceBig(addr common.Address, amount *big.Int) bool {
+	s.opLogger.Printf("%x,CheckEnoughBalance,%x,%d", s.txIndex, addr, amount)
+	stateObject := s.getStateObject(addr)
+	balance := common.U2560
+	if stateObject != nil {
+		balance = stateObject.Balance()
+	}
+	return balance.ToBig().Cmp(amount) >= 0
+}
+
 // GetNonce retrieves the nonce from the given address or 0 if object not found
 func (s *StateDB) GetNonce(addr common.Address) uint64 {
 	s.opLogger.Printf("%x,GetNonce,%x", s.txIndex, addr)
@@ -433,7 +456,7 @@ func (s *StateDB) HasSelfDestructed(addr common.Address) bool {
 
 // AddBalance adds amount to the account associated with addr.
 func (s *StateDB) AddBalance(addr common.Address, amount *uint256.Int) {
-	s.opLogger.Printf("%x,AddBalance,%x", s.txIndex, addr)
+	s.opLogger.Printf("%x,AddBalance,%x,%d", s.txIndex, addr, amount)
 	stateObject := s.getOrNewStateObject(addr)
 	if stateObject != nil {
 		stateObject.AddBalance(amount)
@@ -442,7 +465,7 @@ func (s *StateDB) AddBalance(addr common.Address, amount *uint256.Int) {
 
 // SubBalance subtracts amount from the account associated with addr.
 func (s *StateDB) SubBalance(addr common.Address, amount *uint256.Int) {
-	s.opLogger.Printf("%x,SubBalance,%x", s.txIndex, addr)
+	s.opLogger.Printf("%x,SubBalance,%x,%d", s.txIndex, addr, amount)
 	stateObject := s.getOrNewStateObject(addr)
 	if stateObject != nil {
 		stateObject.SubBalance(amount)
@@ -450,7 +473,7 @@ func (s *StateDB) SubBalance(addr common.Address, amount *uint256.Int) {
 }
 
 func (s *StateDB) SetBalance(addr common.Address, amount *uint256.Int) {
-	s.opLogger.Printf("%x,SetBalance,%x", s.txIndex, addr)
+	s.opLogger.Printf("%x,SetBalance,%x,%d", s.txIndex, addr, amount)
 	stateObject := s.getOrNewStateObject(addr)
 	if stateObject != nil {
 		stateObject.SetBalance(amount)

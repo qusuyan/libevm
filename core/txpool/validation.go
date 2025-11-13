@@ -218,10 +218,10 @@ func ValidateTransactionWithState(tx *types.Transaction, signer types.Signer, op
 	}
 	// Ensure the transactor has enough funds to cover the transaction costs
 	var (
-		balance = opts.State.GetBalance(from).ToBig()
-		cost    = tx.Cost()
+		cost = tx.Cost()
 	)
-	if balance.Cmp(cost) < 0 {
+	if !opts.State.CheckEnoughBalanceBig(from, cost) {
+		balance := opts.State.GetBalance(from).ToBig()
 		return fmt.Errorf("%w: balance %v, tx cost %v, overshot %v", core.ErrInsufficientFunds, balance, cost, new(big.Int).Sub(cost, balance))
 	}
 	// Ensure the transactor has enough funds to cover for replacements or nonce
@@ -230,12 +230,14 @@ func ValidateTransactionWithState(tx *types.Transaction, signer types.Signer, op
 	if prev := opts.ExistingCost(from, tx.Nonce()); prev != nil {
 		bump := new(big.Int).Sub(cost, prev)
 		need := new(big.Int).Add(spent, bump)
-		if balance.Cmp(need) < 0 {
+		if !opts.State.CheckEnoughBalanceBig(from, need) {
+			balance := opts.State.GetBalance(from).ToBig()
 			return fmt.Errorf("%w: balance %v, queued cost %v, tx bumped %v, overshot %v", core.ErrInsufficientFunds, balance, spent, bump, new(big.Int).Sub(need, balance))
 		}
 	} else {
 		need := new(big.Int).Add(spent, cost)
-		if balance.Cmp(need) < 0 {
+		if !opts.State.CheckEnoughBalanceBig(from, need) {
+			balance := opts.State.GetBalance(from).ToBig()
 			return fmt.Errorf("%w: balance %v, queued cost %v, tx cost %v, overshot %v", core.ErrInsufficientFunds, balance, spent, cost, new(big.Int).Sub(need, balance))
 		}
 		// Transaction takes a new nonce value out of the pool. Ensure it doesn't

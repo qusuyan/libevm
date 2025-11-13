@@ -668,17 +668,16 @@ func (p *BlobPool) recheck(addr common.Address, inclusions map[common.Hash]uint6
 	// Ensure that there's no over-draft, this is expected to happen when some
 	// transactions get included without publishing on the network
 	var (
-		balance = p.state.GetBalance(addr)
-		spent   = p.spent[addr]
+		spent = p.spent[addr]
 	)
-	if spent.Cmp(balance) > 0 {
+	if !p.state.CheckEnoughBalance(addr, spent) {
 		// Evict the highest nonce transactions until the pending set falls under
 		// the account's available balance
 		var (
 			ids    []uint64
 			nonces []uint64
 		)
-		for p.spent[addr].Cmp(balance) > 0 {
+		for !p.state.CheckEnoughBalance(addr, p.spent[addr]) {
 			last := txs[len(txs)-1]
 			txs[len(txs)-1] = nil
 			txs = txs[:len(txs)-1]
