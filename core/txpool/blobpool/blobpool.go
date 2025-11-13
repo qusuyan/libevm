@@ -699,7 +699,7 @@ func (p *BlobPool) recheck(addr common.Address, inclusions map[common.Hash]uint6
 		} else {
 			p.index[addr] = txs
 		}
-		log.Warn("Dropping overdrafted blob transactions", "from", addr, "balance", balance, "spent", spent, "drop", nonces, "ids", ids)
+		log.Warn("Dropping overdrafted blob transactions", "from", addr, "spent", spent, "drop", nonces, "ids", ids)
 		dropOverdraftedMeter.Mark(int64(len(ids)))
 
 		for _, id := range ids {
