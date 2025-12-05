@@ -317,21 +317,33 @@ func (s *StateDB) SubRefund(gas uint64) {
 // Exist reports whether the given account address exists in the state.
 // Notably this also returns true for self-destructed accounts.
 func (s *StateDB) Exist(addr common.Address) bool {
-	s.opLogger.Printf("%x,%f,Exist,%x", s.txIndex, time.Since(s.TxnStart).Seconds()*1000, addr)
+	start_time := time.Since(s.TxnStart).Nanoseconds()
+	defer func() {
+		readTime := s.StorageReads.Nanoseconds() + s.AccountReads.Nanoseconds() + s.SnapshotAccountReads.Nanoseconds() + s.SnapshotStorageReads.Nanoseconds()
+		s.opLogger.Printf("%x,%d,%d,Exist,%x", s.txIndex, start_time, readTime, addr)
+	}()
 	return s.getStateObject(addr) != nil
 }
 
 // Empty returns whether the state object is either non-existent
 // or empty according to the EIP161 specification (balance = nonce = code = 0)
 func (s *StateDB) Empty(addr common.Address) bool {
-	s.opLogger.Printf("%x,%f,Empty,%x", s.txIndex, time.Since(s.TxnStart).Seconds()*1000, addr)
+	start_time := time.Since(s.TxnStart).Nanoseconds()
+	defer func() {
+		readTime := s.StorageReads.Nanoseconds() + s.AccountReads.Nanoseconds() + s.SnapshotAccountReads.Nanoseconds() + s.SnapshotStorageReads.Nanoseconds()
+		s.opLogger.Printf("%x,%d,%d,Empty,%x", s.txIndex, start_time, readTime, addr)
+	}()
 	so := s.getStateObject(addr)
 	return so == nil || so.empty()
 }
 
 // GetBalance retrieves the balance from the given address or 0 if object not found
 func (s *StateDB) GetBalance(addr common.Address) *uint256.Int {
-	s.opLogger.Printf("%x,%f,GetBalance,%x", s.txIndex, time.Since(s.TxnStart).Seconds()*1000, addr)
+	start_time := time.Since(s.TxnStart).Nanoseconds()
+	defer func() {
+		readTime := s.StorageReads.Nanoseconds() + s.AccountReads.Nanoseconds() + s.SnapshotAccountReads.Nanoseconds() + s.SnapshotStorageReads.Nanoseconds()
+		s.opLogger.Printf("%x,%d,%d,GetBalance,%x", s.txIndex, start_time, readTime, addr)
+	}()
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
 		return stateObject.Balance()
@@ -341,7 +353,11 @@ func (s *StateDB) GetBalance(addr common.Address) *uint256.Int {
 
 // CheckEnoughBalance checks whether there are enough funds in the address' account to make a transfer.
 func (s *StateDB) CheckEnoughBalance(addr common.Address, amount *uint256.Int) bool {
-	s.opLogger.Printf("%x,%f,CheckEnoughBalance,%x,%d", s.txIndex, time.Since(s.TxnStart).Seconds()*1000, addr, amount)
+	start_time := time.Since(s.TxnStart).Nanoseconds()
+	defer func() {
+		readTime := s.StorageReads.Nanoseconds() + s.AccountReads.Nanoseconds() + s.SnapshotAccountReads.Nanoseconds() + s.SnapshotStorageReads.Nanoseconds()
+		s.opLogger.Printf("%x,%d,%d,CheckEnoughBalance,%x,%d", s.txIndex, start_time, readTime, addr, amount)
+	}()
 	stateObject := s.getStateObject(addr)
 	balance := common.U2560
 	if stateObject != nil {
@@ -352,7 +368,11 @@ func (s *StateDB) CheckEnoughBalance(addr common.Address, amount *uint256.Int) b
 
 // CheckEnoughBalance checks whether there are enough funds in the address' account to make a transfer.
 func (s *StateDB) CheckEnoughBalanceBig(addr common.Address, amount *big.Int) bool {
-	s.opLogger.Printf("%x,%f,CheckEnoughBalance,%x,%d", s.txIndex, time.Since(s.TxnStart).Seconds()*1000, addr, amount)
+	start_time := time.Since(s.TxnStart).Nanoseconds()
+	defer func() {
+		readTime := s.StorageReads.Nanoseconds() + s.AccountReads.Nanoseconds() + s.SnapshotAccountReads.Nanoseconds() + s.SnapshotStorageReads.Nanoseconds()
+		s.opLogger.Printf("%x,%d,%d,CheckEnoughBalance,%x,%d", s.txIndex, start_time, readTime, addr, amount)
+	}()
 	stateObject := s.getStateObject(addr)
 	balance := common.U2560
 	if stateObject != nil {
@@ -363,7 +383,11 @@ func (s *StateDB) CheckEnoughBalanceBig(addr common.Address, amount *big.Int) bo
 
 // GetNonce retrieves the nonce from the given address or 0 if object not found
 func (s *StateDB) GetNonce(addr common.Address) uint64 {
-	s.opLogger.Printf("%x,%f,GetNonce,%x", s.txIndex, time.Since(s.TxnStart).Seconds()*1000, addr)
+	start_time := time.Since(s.TxnStart).Nanoseconds()
+	defer func() {
+		readTime := s.StorageReads.Nanoseconds() + s.AccountReads.Nanoseconds() + s.SnapshotAccountReads.Nanoseconds() + s.SnapshotStorageReads.Nanoseconds()
+		s.opLogger.Printf("%x,%d,%d,GetNonce,%x", s.txIndex, start_time, readTime, addr)
+	}()
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
 		return stateObject.Nonce()
@@ -375,7 +399,11 @@ func (s *StateDB) GetNonce(addr common.Address) uint64 {
 // GetStorageRoot retrieves the storage root from the given address or empty
 // if object not found.
 func (s *StateDB) GetStorageRoot(addr common.Address) common.Hash {
-	s.opLogger.Printf("%x,%f,GetStorageRoot,%x", s.txIndex, time.Since(s.TxnStart).Seconds()*1000, addr)
+	start_time := time.Since(s.TxnStart).Nanoseconds()
+	defer func() {
+		readTime := s.StorageReads.Nanoseconds() + s.AccountReads.Nanoseconds() + s.SnapshotAccountReads.Nanoseconds() + s.SnapshotStorageReads.Nanoseconds()
+		s.opLogger.Printf("%x,%d,%d,GetStorageRoot,%x", s.txIndex, start_time, readTime, addr)
+	}()
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
 		return stateObject.Root()
@@ -389,7 +417,11 @@ func (s *StateDB) TxIndex() int {
 }
 
 func (s *StateDB) GetCode(addr common.Address) []byte {
-	s.opLogger.Printf("%x,%f,GetCode,%x", s.txIndex, time.Since(s.TxnStart).Seconds()*1000, addr)
+	start_time := time.Since(s.TxnStart).Nanoseconds()
+	defer func() {
+		readTime := s.StorageReads.Nanoseconds() + s.AccountReads.Nanoseconds() + s.SnapshotAccountReads.Nanoseconds() + s.SnapshotStorageReads.Nanoseconds()
+		s.opLogger.Printf("%x,%d,%d,GetCode,%x", s.txIndex, start_time, readTime, addr)
+	}()
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
 		return stateObject.Code()
@@ -398,7 +430,11 @@ func (s *StateDB) GetCode(addr common.Address) []byte {
 }
 
 func (s *StateDB) GetCodeSize(addr common.Address) int {
-	s.opLogger.Printf("%x,%f,GetCodeSize,%x", s.txIndex, time.Since(s.TxnStart).Seconds()*1000, addr)
+	start_time := time.Since(s.TxnStart).Nanoseconds()
+	defer func() {
+		readTime := s.StorageReads.Nanoseconds() + s.AccountReads.Nanoseconds() + s.SnapshotAccountReads.Nanoseconds() + s.SnapshotStorageReads.Nanoseconds()
+		s.opLogger.Printf("%x,%d,%d,GetCodeSize,%x", s.txIndex, start_time, readTime, addr)
+	}()
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
 		return stateObject.CodeSize()
@@ -407,7 +443,11 @@ func (s *StateDB) GetCodeSize(addr common.Address) int {
 }
 
 func (s *StateDB) GetCodeHash(addr common.Address) common.Hash {
-	s.opLogger.Printf("%x,%f,GetCodeHash,%x", s.txIndex, time.Since(s.TxnStart).Seconds()*1000, addr)
+	start_time := time.Since(s.TxnStart).Nanoseconds()
+	defer func() {
+		readTime := s.StorageReads.Nanoseconds() + s.AccountReads.Nanoseconds() + s.SnapshotAccountReads.Nanoseconds() + s.SnapshotStorageReads.Nanoseconds()
+		s.opLogger.Printf("%x,%d,%d,GetCodeHash,%x", s.txIndex, start_time, readTime, addr)
+	}()
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
 		return common.BytesToHash(stateObject.CodeHash())
@@ -417,7 +457,11 @@ func (s *StateDB) GetCodeHash(addr common.Address) common.Hash {
 
 // GetState retrieves a value from the given account's storage trie.
 func (s *StateDB) GetState(addr common.Address, hash common.Hash, opts ...stateconf.StateDBStateOption) common.Hash {
-	s.opLogger.Printf("%x,%f,GetState,%x,%x", s.txIndex, time.Since(s.TxnStart).Seconds()*1000, addr, hash)
+	start_time := time.Since(s.TxnStart).Nanoseconds()
+	defer func() {
+		readTime := s.StorageReads.Nanoseconds() + s.AccountReads.Nanoseconds() + s.SnapshotAccountReads.Nanoseconds() + s.SnapshotStorageReads.Nanoseconds()
+		s.opLogger.Printf("%x,%d,%d,GetState,%x-%x", s.txIndex, start_time, readTime, addr, hash)
+	}()
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
 		hash = transformStateKey(addr, hash, opts...)
@@ -428,7 +472,11 @@ func (s *StateDB) GetState(addr common.Address, hash common.Hash, opts ...statec
 
 // GetCommittedState retrieves a value from the given account's committed storage trie.
 func (s *StateDB) GetCommittedState(addr common.Address, hash common.Hash, opts ...stateconf.StateDBStateOption) common.Hash {
-	s.opLogger.Printf("%x,%f,GetCommittedState,%x,%x", s.txIndex, time.Since(s.TxnStart).Seconds()*1000, addr, hash)
+	start_time := time.Since(s.TxnStart).Nanoseconds()
+	defer func() {
+		readTime := s.StorageReads.Nanoseconds() + s.AccountReads.Nanoseconds() + s.SnapshotAccountReads.Nanoseconds() + s.SnapshotStorageReads.Nanoseconds()
+		s.opLogger.Printf("%x,%d,%d,GetCommittedState,%x-%x", s.txIndex, start_time, readTime, addr, hash)
+	}()
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
 		hash = transformStateKey(addr, hash, opts...)
@@ -443,7 +491,11 @@ func (s *StateDB) Database() Database {
 }
 
 func (s *StateDB) HasSelfDestructed(addr common.Address) bool {
-	s.opLogger.Printf("%x,%f,HasSelfDestructed,%x", s.txIndex, time.Since(s.TxnStart).Seconds()*1000, addr)
+	start_time := time.Since(s.TxnStart).Nanoseconds()
+	defer func() {
+		readTime := s.StorageReads.Nanoseconds() + s.AccountReads.Nanoseconds() + s.SnapshotAccountReads.Nanoseconds() + s.SnapshotStorageReads.Nanoseconds()
+		s.opLogger.Printf("%x,%d,%d,HasSelfDestructed,%x", s.txIndex, start_time, readTime, addr)
+	}()
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
 		return stateObject.selfDestructed
@@ -457,7 +509,11 @@ func (s *StateDB) HasSelfDestructed(addr common.Address) bool {
 
 // AddBalance adds amount to the account associated with addr.
 func (s *StateDB) AddBalance(addr common.Address, amount *uint256.Int) {
-	s.opLogger.Printf("%x,%f,AddBalance,%x,%d", s.txIndex, time.Since(s.TxnStart).Seconds()*1000, addr, amount)
+	start_time := time.Since(s.TxnStart).Nanoseconds()
+	defer func() {
+		readTime := s.StorageReads.Nanoseconds() + s.AccountReads.Nanoseconds() + s.SnapshotAccountReads.Nanoseconds() + s.SnapshotStorageReads.Nanoseconds()
+		s.opLogger.Printf("%x,%d,%d,AddBalance,%x,%d", s.txIndex, start_time, readTime, addr, amount)
+	}()
 	stateObject := s.getOrNewStateObject(addr)
 	if stateObject != nil {
 		stateObject.AddBalance(amount)
@@ -466,7 +522,11 @@ func (s *StateDB) AddBalance(addr common.Address, amount *uint256.Int) {
 
 // SubBalance subtracts amount from the account associated with addr.
 func (s *StateDB) SubBalance(addr common.Address, amount *uint256.Int) {
-	s.opLogger.Printf("%x,%f,SubBalance,%x,%d", s.txIndex, time.Since(s.TxnStart).Seconds()*1000, addr, amount)
+	start_time := time.Since(s.TxnStart).Nanoseconds()
+	defer func() {
+		readTime := s.StorageReads.Nanoseconds() + s.AccountReads.Nanoseconds() + s.SnapshotAccountReads.Nanoseconds() + s.SnapshotStorageReads.Nanoseconds()
+		s.opLogger.Printf("%x,%d,%d,SubBalance,%x,%d", s.txIndex, start_time, readTime, addr, amount)
+	}()
 	stateObject := s.getOrNewStateObject(addr)
 	if stateObject != nil {
 		stateObject.SubBalance(amount)
@@ -474,7 +534,11 @@ func (s *StateDB) SubBalance(addr common.Address, amount *uint256.Int) {
 }
 
 func (s *StateDB) SetBalance(addr common.Address, amount *uint256.Int) {
-	s.opLogger.Printf("%x,%f,SetBalance,%x,%d", s.txIndex, time.Since(s.TxnStart).Seconds()*1000, addr, amount)
+	start_time := time.Since(s.TxnStart).Nanoseconds()
+	defer func() {
+		readTime := s.StorageReads.Nanoseconds() + s.AccountReads.Nanoseconds() + s.SnapshotAccountReads.Nanoseconds() + s.SnapshotStorageReads.Nanoseconds()
+		s.opLogger.Printf("%x,%d,%d,SetBalance,%x,%d", s.txIndex, start_time, readTime, addr, amount)
+	}()
 	stateObject := s.getOrNewStateObject(addr)
 	if stateObject != nil {
 		stateObject.SetBalance(amount)
@@ -482,7 +546,11 @@ func (s *StateDB) SetBalance(addr common.Address, amount *uint256.Int) {
 }
 
 func (s *StateDB) SetNonce(addr common.Address, nonce uint64) {
-	s.opLogger.Printf("%x,%f,SetNonce,%x", s.txIndex, time.Since(s.TxnStart).Seconds()*1000, addr)
+	start_time := time.Since(s.TxnStart).Nanoseconds()
+	defer func() {
+		readTime := s.StorageReads.Nanoseconds() + s.AccountReads.Nanoseconds() + s.SnapshotAccountReads.Nanoseconds() + s.SnapshotStorageReads.Nanoseconds()
+		s.opLogger.Printf("%x,%d,%d,SetNonce,%x", s.txIndex, start_time, readTime, addr)
+	}()
 	stateObject := s.getOrNewStateObject(addr)
 	if stateObject != nil {
 		stateObject.SetNonce(nonce)
@@ -490,7 +558,11 @@ func (s *StateDB) SetNonce(addr common.Address, nonce uint64) {
 }
 
 func (s *StateDB) SetCode(addr common.Address, code []byte) {
-	s.opLogger.Printf("%x,%f,SetCode,%x", s.txIndex, time.Since(s.TxnStart).Seconds()*1000, addr)
+	start_time := time.Since(s.TxnStart).Nanoseconds()
+	defer func() {
+		readTime := s.StorageReads.Nanoseconds() + s.AccountReads.Nanoseconds() + s.SnapshotAccountReads.Nanoseconds() + s.SnapshotStorageReads.Nanoseconds()
+		s.opLogger.Printf("%x,%d,%d,SetCode,%x", s.txIndex, start_time, readTime, addr)
+	}()
 	stateObject := s.getOrNewStateObject(addr)
 	if stateObject != nil {
 		stateObject.SetCode(crypto.Keccak256Hash(code), code)
@@ -498,7 +570,11 @@ func (s *StateDB) SetCode(addr common.Address, code []byte) {
 }
 
 func (s *StateDB) SetState(addr common.Address, key, value common.Hash, opts ...stateconf.StateDBStateOption) {
-	s.opLogger.Printf("%x,%f,SetState,%x,%x", s.txIndex, time.Since(s.TxnStart).Seconds()*1000, addr, key)
+	start_time := time.Since(s.TxnStart).Nanoseconds()
+	defer func() {
+		readTime := s.StorageReads.Nanoseconds() + s.AccountReads.Nanoseconds() + s.SnapshotAccountReads.Nanoseconds() + s.SnapshotStorageReads.Nanoseconds()
+		s.opLogger.Printf("%x,%d,%d,SetState,%x-%x", s.txIndex, start_time, readTime, addr, key)
+	}()
 	stateObject := s.getOrNewStateObject(addr)
 	if stateObject != nil {
 		key = transformStateKey(addr, key, opts...)
@@ -518,7 +594,11 @@ func (s *StateDB) SetStorage(addr common.Address, storage map[common.Hash]common
 	//
 	// TODO(rjl493456442) this function should only be supported by 'unwritable'
 	// state and all mutations made should all be discarded afterwards.
-	s.opLogger.Printf("%x,%f,SetStorage,%x", s.txIndex, time.Since(s.TxnStart).Seconds()*1000, addr)
+	start_time := time.Since(s.TxnStart).Nanoseconds()
+	defer func() {
+		readTime := s.StorageReads.Nanoseconds() + s.AccountReads.Nanoseconds() + s.SnapshotAccountReads.Nanoseconds() + s.SnapshotStorageReads.Nanoseconds()
+		s.opLogger.Printf("%x,%d,%d,SetStorage,%x", s.txIndex, start_time, readTime, addr)
+	}()
 	if _, ok := s.stateObjectsDestruct[addr]; !ok {
 		s.stateObjectsDestruct[addr] = nil
 	}
@@ -534,7 +614,11 @@ func (s *StateDB) SetStorage(addr common.Address, storage map[common.Hash]common
 // The account's state object is still available until the state is committed,
 // getStateObject will return a non-nil account after SelfDestruct.
 func (s *StateDB) SelfDestruct(addr common.Address) {
-	s.opLogger.Printf("%x,%f,SelfDestruct,%x", s.txIndex, time.Since(s.TxnStart).Seconds()*1000, addr)
+	start_time := time.Since(s.TxnStart).Nanoseconds()
+	defer func() {
+		readTime := s.StorageReads.Nanoseconds() + s.AccountReads.Nanoseconds() + s.SnapshotAccountReads.Nanoseconds() + s.SnapshotStorageReads.Nanoseconds()
+		s.opLogger.Printf("%x,%d,%d,SelfDestruct,%x", s.txIndex, start_time, readTime, addr)
+	}()
 	stateObject := s.getStateObject(addr)
 	if stateObject == nil {
 		return
@@ -549,7 +633,11 @@ func (s *StateDB) SelfDestruct(addr common.Address) {
 }
 
 func (s *StateDB) Selfdestruct6780(addr common.Address) {
-	s.opLogger.Printf("%x,%f,Selfdestruct6780,%x", s.txIndex, time.Since(s.TxnStart).Seconds()*1000, addr)
+	start_time := time.Since(s.TxnStart).Nanoseconds()
+	defer func() {
+		readTime := s.StorageReads.Nanoseconds() + s.AccountReads.Nanoseconds() + s.SnapshotAccountReads.Nanoseconds() + s.SnapshotStorageReads.Nanoseconds()
+		s.opLogger.Printf("%x,%d,%d,Selfdestruct6780,%x", s.txIndex, start_time, readTime, addr)
+	}()
 	stateObject := s.getStateObject(addr)
 	if stateObject == nil {
 		return
@@ -770,7 +858,11 @@ func (s *StateDB) createObject(addr common.Address) (newobj, prev *stateObject) 
 //
 // Carrying over the balance ensures that Ether doesn't disappear.
 func (s *StateDB) CreateAccount(addr common.Address) {
-	s.opLogger.Printf("%x,%f,CreateAccount,%x", s.txIndex, time.Since(s.TxnStart).Seconds()*1000, addr)
+	start_time := time.Since(s.TxnStart).Nanoseconds()
+	defer func() {
+		readTime := s.StorageReads.Nanoseconds() + s.AccountReads.Nanoseconds() + s.SnapshotAccountReads.Nanoseconds() + s.SnapshotStorageReads.Nanoseconds()
+		s.opLogger.Printf("%x,%d,%d,CreateAccount,%x", s.txIndex, start_time, readTime, addr)
+	}()
 	newObj, prev := s.createObject(addr)
 	if prev != nil {
 		newObj.setBalance(prev.data.Balance)
