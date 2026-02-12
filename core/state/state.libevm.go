@@ -22,44 +22,30 @@ import (
 	"github.com/ava-labs/libevm/internal/libevm/pseudo"
 )
 
+type StateDBExt interface {
+	GetExtra(addr common.Address) *types.StateAccountExtra
+	SetExtra(addr common.Address, extra *types.StateAccountExtra)
+}
+
 // GetExtra returns the extra payload from the [types.StateAccount] associated
 // with the address, or a zero-value `SA` if not found. The [pseudo.Accessor]
 // MUST be sourced from [types.RegisterExtras].
-func GetExtra[SA any](s *StateDB, a pseudo.Accessor[types.StateOrSlimAccount, SA], addr common.Address) SA {
-	stateObject := s.getStateObject(addr)
-	if stateObject != nil {
-		return a.Get(&stateObject.data)
+func GetExtra[SA any](s StateDBExt, a pseudo.Accessor[**types.StateAccountExtra, SA], addr common.Address) SA {
+	if extra := s.GetExtra(addr); extra != nil {
+		return a.Get(&extra)
 	}
 	var zero SA
 	return zero
 }
 
 // SetExtra sets the extra payload for the address. See [GetExtra] for details.
-func SetExtra[SA any](s *StateDB, a pseudo.Accessor[types.StateOrSlimAccount, SA], addr common.Address, extra SA) {
-	stateObject := s.getOrNewStateObject(addr)
-	if stateObject != nil {
-		setExtraOnObject(stateObject, a, addr, extra)
+func SetExtra[SA any](s StateDBExt, a pseudo.Accessor[**types.StateAccountExtra, SA], addr common.Address, extra SA) {
+	current := s.GetExtra(addr)
+	var next *types.StateAccountExtra
+	if current != nil {
+		cpy := *current
+		next = &cpy
 	}
-}
-
-func setExtraOnObject[SA any](s *stateObject, a pseudo.Accessor[types.StateOrSlimAccount, SA], addr common.Address, extra SA) {
-	s.db.journal.append(extraChange[SA]{
-		accessor: a,
-		account:  &addr,
-		prev:     a.Get(&s.data),
-	})
-	a.Set(&s.data, extra)
-}
-
-// extraChange is a [journalEntry] for [SetExtra] / [setExtraOnObject].
-type extraChange[SA any] struct {
-	accessor pseudo.Accessor[types.StateOrSlimAccount, SA]
-	account  *common.Address
-	prev     SA
-}
-
-func (e extraChange[SA]) dirtied() *common.Address { return e.account }
-
-func (e extraChange[SA]) revert(s *StateDB) {
-	e.accessor.Set(&s.getStateObject(*e.account).data, e.prev)
+	a.Set(&next, extra)
+	s.SetExtra(addr, next)
 }

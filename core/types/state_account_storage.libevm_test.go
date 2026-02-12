@@ -78,9 +78,9 @@ func TestStateAccountExtraViaTrieStorage(t *testing.T) {
 					types.NOOPBlockBodyHooks, *types.NOOPBlockBodyHooks,
 					bool,
 				]()
-				e.StateAccount.Set(a, true)
+				e.StateAccount.Set(&a.Extra, true)
 				return a, func(t *testing.T, got *types.StateAccount) { //nolint:thelper
-					assert.Truef(t, e.StateAccount.Get(got), "")
+					assert.Truef(t, e.StateAccount.Get(&got.Extra), "")
 				}
 			},
 			wantTrieHash: trueBool,
@@ -93,10 +93,10 @@ func TestStateAccountExtraViaTrieStorage(t *testing.T) {
 					types.NOOPBlockBodyHooks, *types.NOOPBlockBodyHooks,
 					bool,
 				]()
-				e.StateAccount.Set(a, false) // the explicit part
+				e.StateAccount.Set(&a.Extra, false) // the explicit part
 
 				return a, func(t *testing.T, got *types.StateAccount) { //nolint:thelper
-					assert.Falsef(t, e.StateAccount.Get(got), "")
+					assert.Falsef(t, e.StateAccount.Get(&got.Extra), "")
 				}
 			},
 			wantTrieHash: falseBool,
@@ -111,7 +111,7 @@ func TestStateAccountExtraViaTrieStorage(t *testing.T) {
 				]()
 				// Note that `a` is reflected, unchanged (the implicit part).
 				return a, func(t *testing.T, got *types.StateAccount) { //nolint:thelper
-					assert.Falsef(t, e.StateAccount.Get(got), "")
+					assert.Falsef(t, e.StateAccount.Get(&got.Extra), "")
 				}
 			},
 			wantTrieHash: falseBool,
@@ -125,9 +125,9 @@ func TestStateAccountExtraViaTrieStorage(t *testing.T) {
 					arbitraryPayload,
 				]()
 				p := arbitraryPayload{arbitraryData}
-				e.StateAccount.Set(a, p)
+				e.StateAccount.Set(&a.Extra, p)
 				return a, func(t *testing.T, got *types.StateAccount) { //nolint:thelper
-					assert.Equalf(t, arbitraryPayload{arbitraryData}, e.StateAccount.Get(got), "")
+					assert.Equalf(t, arbitraryPayload{arbitraryData}, e.StateAccount.Get(&got.Extra), "")
 				}
 			},
 			wantTrieHash: arbitrary,

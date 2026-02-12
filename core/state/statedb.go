@@ -1404,3 +1404,22 @@ func copy2DSet[k comparable](set map[k]map[common.Hash][]byte) map[k]map[common.
 	}
 	return copied
 }
+
+func (s *StateDB) GetExtra(addr common.Address) *types.StateAccountExtra {
+	stateObject := s.getStateObject(addr)
+	if stateObject != nil {
+		return stateObject.data.Extra
+	}
+	return nil
+}
+
+func (s *StateDB) SetExtra(addr common.Address, extra *types.StateAccountExtra) {
+	stateObject := s.getOrNewStateObject(addr)
+	if stateObject == nil {
+		return
+	}
+	if extra == nil {
+		extra = &types.StateAccountExtra{}
+	}
+	stateObject.SetExtra(*extra)
+}

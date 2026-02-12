@@ -544,3 +544,26 @@ func (s *stateObject) Nonce() uint64 {
 func (s *stateObject) Root() common.Hash {
 	return s.data.Root
 }
+
+func (s *stateObject) Extra() types.StateAccountExtra {
+	if s.data.Extra == nil {
+		return types.StateAccountExtra{}
+	}
+	return *s.data.Extra
+}
+
+func (s *stateObject) SetExtra(extra types.StateAccountExtra) {
+	prev := types.StateAccountExtra{}
+	if s.data.Extra != nil {
+		prev = *s.data.Extra
+	}
+	s.db.journal.append(extraChange{
+		address: &s.address,
+		prev:    prev,
+	})
+	s.setExtra(extra)
+}
+
+func (s *stateObject) setExtra(extra types.StateAccountExtra) {
+	s.data.Extra = &extra
+}

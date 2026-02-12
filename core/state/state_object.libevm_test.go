@@ -50,7 +50,7 @@ func TestStateObjectEmpty(t *testing.T) {
 					types.NOOPHeaderHooks, *types.NOOPHeaderHooks,
 					types.NOOPBlockBodyHooks, *types.NOOPBlockBodyHooks,
 					bool,
-				]().StateAccount.Set(acc, false)
+				]().StateAccount.Set(&acc.Extra, false)
 			},
 			wantEmpty: true,
 		},
@@ -72,7 +72,7 @@ func TestStateObjectEmpty(t *testing.T) {
 					types.NOOPHeaderHooks, *types.NOOPHeaderHooks,
 					types.NOOPBlockBodyHooks, *types.NOOPBlockBodyHooks,
 					bool,
-				]().StateAccount.Set(acc, true)
+				]().StateAccount.Set(&acc.Extra, true)
 			},
 			wantEmpty: false,
 		},
