@@ -110,10 +110,10 @@ type StateDB struct {
 	preimages map[common.Hash][]byte
 
 	// Per-transaction access list
-	accessList *accessList
+	accessList *AccessList
 
 	// Transient storage
-	transientStorage transientStorage
+	transientStorage TransientStorage
 
 	// Journal of state modifications. This is the backbone of
 	// Snapshot and RevertToSnapshot.
@@ -167,8 +167,8 @@ func New(root common.Hash, db Database, snaps SnapshotTree) (*StateDB, error) {
 		logs:                 make(map[common.Hash][]*types.Log),
 		preimages:            make(map[common.Hash][]byte),
 		journal:              newJournal(),
-		accessList:           newAccessList(),
-		transientStorage:     newTransientStorage(),
+		accessList:           NewAccessList(),
+		transientStorage:     NewTransientStorage(),
 		hasher:               crypto.NewKeccakState(),
 	}
 	if sdb.snaps != nil {
@@ -1310,7 +1310,7 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool, opts ...statecon
 func (s *StateDB) Prepare(rules params.Rules, sender, coinbase common.Address, dst *common.Address, precompiles []common.Address, list types.AccessList) {
 	if rules.IsBerlin {
 		// Clear out any leftover from previous executions
-		al := newAccessList()
+		al := NewAccessList()
 		s.accessList = al
 
 		al.AddAddress(sender)
@@ -1332,7 +1332,7 @@ func (s *StateDB) Prepare(rules params.Rules, sender, coinbase common.Address, d
 		}
 	}
 	// Reset transient storage at the beginning of transaction execution
-	s.transientStorage = newTransientStorage()
+	s.transientStorage = NewTransientStorage()
 }
 
 // AddAddressToAccessList adds the given address to the access list
