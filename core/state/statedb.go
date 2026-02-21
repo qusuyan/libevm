@@ -199,8 +199,8 @@ func (s *StateDB) StopPrefetcher() {
 	}
 }
 
-// setError remembers the first non-nil error it is called with.
-func (s *StateDB) setError(err error) {
+// SetError remembers the first non-nil error it is called with.
+func (s *StateDB) SetError(err error) {
 	if s.dbErr == nil {
 		s.dbErr = err
 	}
@@ -515,7 +515,7 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 	// Encode the account and update the account trie
 	addr := obj.Address()
 	if err := s.trie.UpdateAccount(addr, &obj.data); err != nil {
-		s.setError(fmt.Errorf("updateStateObject (%x) error: %v", addr[:], err))
+		s.SetError(fmt.Errorf("updateStateObject (%x) error: %v", addr[:], err))
 	}
 	if obj.dirtyCode {
 		s.trie.UpdateContractCode(obj.Address(), common.BytesToHash(obj.CodeHash()), obj.code)
@@ -547,7 +547,7 @@ func (s *StateDB) deleteStateObject(obj *stateObject) {
 	// Delete the account from the trie
 	addr := obj.Address()
 	if err := s.trie.DeleteAccount(addr); err != nil {
-		s.setError(fmt.Errorf("deleteStateObject (%x) error: %v", addr[:], err))
+		s.SetError(fmt.Errorf("deleteStateObject (%x) error: %v", addr[:], err))
 	}
 }
 
@@ -606,7 +606,7 @@ func (s *StateDB) getDeletedStateObject(addr common.Address) *stateObject {
 			s.AccountReads += time.Since(start)
 		}
 		if err != nil {
-			s.setError(fmt.Errorf("getDeleteStateObject (%x) error: %w", addr.Bytes(), err))
+			s.SetError(fmt.Errorf("getDeleteStateObject (%x) error: %w", addr.Bytes(), err))
 			return nil
 		}
 		if data == nil {

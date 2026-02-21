@@ -203,7 +203,7 @@ func (s *stateObject) GetCommittedState(key common.Hash) common.Hash {
 		if len(enc) > 0 {
 			_, content, _, err := rlp.Split(enc)
 			if err != nil {
-				s.db.setError(err)
+				s.db.SetError(err)
 			}
 			value.SetBytes(content)
 		}
@@ -213,7 +213,7 @@ func (s *stateObject) GetCommittedState(key common.Hash) common.Hash {
 		start := time.Now()
 		tr, err := s.getTrie()
 		if err != nil {
-			s.db.setError(err)
+			s.db.SetError(err)
 			return common.Hash{}
 		}
 		val, err := tr.GetStorage(s.address, key.Bytes())
@@ -221,7 +221,7 @@ func (s *stateObject) GetCommittedState(key common.Hash) common.Hash {
 			s.db.StorageReads += time.Since(start)
 		}
 		if err != nil {
-			s.db.setError(err)
+			s.db.SetError(err)
 			return common.Hash{}
 		}
 		value.SetBytes(val)
@@ -293,7 +293,7 @@ func (s *stateObject) updateTrie() (Trie, error) {
 	)
 	tr, err := s.getTrie()
 	if err != nil {
-		s.db.setError(err)
+		s.db.SetError(err)
 		return nil, err
 	}
 	// Insert all the pending storage updates into the trie
@@ -309,7 +309,7 @@ func (s *stateObject) updateTrie() (Trie, error) {
 		var encoded []byte // rlp-encoded value to be used by the snapshot
 		if (value == common.Hash{}) {
 			if err := tr.DeleteStorage(s.address, key[:]); err != nil {
-				s.db.setError(err)
+				s.db.SetError(err)
 				return nil, err
 			}
 			s.db.StorageDeleted += 1
@@ -318,7 +318,7 @@ func (s *stateObject) updateTrie() (Trie, error) {
 			trimmed := common.TrimLeftZeroes(value[:])
 			encoded, _ = rlp.EncodeToBytes(trimmed)
 			if err := tr.UpdateStorage(s.address, key[:], trimmed); err != nil {
-				s.db.setError(err)
+				s.db.SetError(err)
 				return nil, err
 			}
 			s.db.StorageUpdated += 1
@@ -478,7 +478,7 @@ func (s *stateObject) Code() []byte {
 	}
 	code, err := s.db.db.ContractCode(s.address, common.BytesToHash(s.CodeHash()))
 	if err != nil {
-		s.db.setError(fmt.Errorf("can't load code hash %x: %v", s.CodeHash(), err))
+		s.db.SetError(fmt.Errorf("can't load code hash %x: %v", s.CodeHash(), err))
 	}
 	s.code = code
 	return code
@@ -496,7 +496,7 @@ func (s *stateObject) CodeSize() int {
 	}
 	size, err := s.db.db.ContractCodeSize(s.address, common.BytesToHash(s.CodeHash()))
 	if err != nil {
-		s.db.setError(fmt.Errorf("can't load code size %x: %v", s.CodeHash(), err))
+		s.db.SetError(fmt.Errorf("can't load code size %x: %v", s.CodeHash(), err))
 	}
 	return size
 }
