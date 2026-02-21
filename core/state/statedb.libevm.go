@@ -111,7 +111,9 @@ func TestOnlyClearRegisteredExtras() {
 
 var registeredExtras register.AtMostOnce[StateDBHooks]
 
-func transformStateKey(addr common.Address, key common.Hash, opts ...stateconf.StateDBStateOption) common.Hash {
+// TransformStateKey returns the canonical storage key used by StateDB methods
+// that access account storage: GetState, GetCommittedState, and SetState.
+func TransformStateKey(addr common.Address, key common.Hash, opts ...stateconf.StateDBStateOption) common.Hash {
 	r := &registeredExtras
 	if !r.Registered() || !stateconf.ShouldTransformStateKey(opts...) {
 		return key

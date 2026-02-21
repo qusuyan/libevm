@@ -346,7 +346,7 @@ func (s *StateDB) GetCodeHash(addr common.Address) common.Hash {
 func (s *StateDB) GetState(addr common.Address, hash common.Hash, opts ...stateconf.StateDBStateOption) common.Hash {
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
-		hash = transformStateKey(addr, hash, opts...)
+		hash = TransformStateKey(addr, hash, opts...)
 		return stateObject.GetState(hash)
 	}
 	return common.Hash{}
@@ -356,7 +356,7 @@ func (s *StateDB) GetState(addr common.Address, hash common.Hash, opts ...statec
 func (s *StateDB) GetCommittedState(addr common.Address, hash common.Hash, opts ...stateconf.StateDBStateOption) common.Hash {
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
-		hash = transformStateKey(addr, hash, opts...)
+		hash = TransformStateKey(addr, hash, opts...)
 		return stateObject.GetCommittedState(hash)
 	}
 	return common.Hash{}
@@ -419,7 +419,7 @@ func (s *StateDB) SetCode(addr common.Address, code []byte) {
 func (s *StateDB) SetState(addr common.Address, key, value common.Hash, opts ...stateconf.StateDBStateOption) {
 	stateObject := s.getOrNewStateObject(addr)
 	if stateObject != nil {
-		key = transformStateKey(addr, key, opts...)
+		key = TransformStateKey(addr, key, opts...)
 		stateObject.SetState(key, value)
 	}
 }
