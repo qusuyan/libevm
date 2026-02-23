@@ -110,10 +110,10 @@ type StateDB struct {
 	preimages map[common.Hash][]byte
 
 	// Per-transaction access list
-	accessList *accessList
+	accessList *AccessList
 
 	// Transient storage
-	transientStorage transientStorage
+	transientStorage TransientStorage
 
 	// Journal of state modifications. This is the backbone of
 	// Snapshot and RevertToSnapshot.
@@ -167,8 +167,8 @@ func New(root common.Hash, db Database, snaps SnapshotTree) (*StateDB, error) {
 		logs:                 make(map[common.Hash][]*types.Log),
 		preimages:            make(map[common.Hash][]byte),
 		journal:              newJournal(),
-		accessList:           newAccessList(),
-		transientStorage:     newTransientStorage(),
+		accessList:           NewAccessList(),
+		transientStorage:     NewTransientStorage(),
 		hasher:               crypto.NewKeccakState(),
 	}
 	if sdb.snaps != nil {
@@ -199,8 +199,8 @@ func (s *StateDB) StopPrefetcher() {
 	}
 }
 
-// setError remembers the first non-nil error it is called with.
-func (s *StateDB) setError(err error) {
+// SetError remembers the first non-nil error it is called with.
+func (s *StateDB) SetError(err error) {
 	if s.dbErr == nil {
 		s.dbErr = err
 	}
@@ -346,7 +346,7 @@ func (s *StateDB) GetCodeHash(addr common.Address) common.Hash {
 func (s *StateDB) GetState(addr common.Address, hash common.Hash, opts ...stateconf.StateDBStateOption) common.Hash {
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
-		hash = transformStateKey(addr, hash, opts...)
+		hash = TransformStateKey(addr, hash, opts...)
 		return stateObject.GetState(hash)
 	}
 	return common.Hash{}
@@ -356,7 +356,7 @@ func (s *StateDB) GetState(addr common.Address, hash common.Hash, opts ...statec
 func (s *StateDB) GetCommittedState(addr common.Address, hash common.Hash, opts ...stateconf.StateDBStateOption) common.Hash {
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
-		hash = transformStateKey(addr, hash, opts...)
+		hash = TransformStateKey(addr, hash, opts...)
 		return stateObject.GetCommittedState(hash)
 	}
 	return common.Hash{}
@@ -419,7 +419,7 @@ func (s *StateDB) SetCode(addr common.Address, code []byte) {
 func (s *StateDB) SetState(addr common.Address, key, value common.Hash, opts ...stateconf.StateDBStateOption) {
 	stateObject := s.getOrNewStateObject(addr)
 	if stateObject != nil {
-		key = transformStateKey(addr, key, opts...)
+		key = TransformStateKey(addr, key, opts...)
 		stateObject.SetState(key, value)
 	}
 }
@@ -515,7 +515,7 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 	// Encode the account and update the account trie
 	addr := obj.Address()
 	if err := s.trie.UpdateAccount(addr, &obj.data); err != nil {
-		s.setError(fmt.Errorf("updateStateObject (%x) error: %v", addr[:], err))
+		s.SetError(fmt.Errorf("updateStateObject (%x) error: %v", addr[:], err))
 	}
 	if obj.dirtyCode {
 		s.trie.UpdateContractCode(obj.Address(), common.BytesToHash(obj.CodeHash()), obj.code)
@@ -547,7 +547,7 @@ func (s *StateDB) deleteStateObject(obj *stateObject) {
 	// Delete the account from the trie
 	addr := obj.Address()
 	if err := s.trie.DeleteAccount(addr); err != nil {
-		s.setError(fmt.Errorf("deleteStateObject (%x) error: %v", addr[:], err))
+		s.SetError(fmt.Errorf("deleteStateObject (%x) error: %v", addr[:], err))
 	}
 }
 
@@ -606,7 +606,7 @@ func (s *StateDB) getDeletedStateObject(addr common.Address) *stateObject {
 			s.AccountReads += time.Since(start)
 		}
 		if err != nil {
-			s.setError(fmt.Errorf("getDeleteStateObject (%x) error: %w", addr.Bytes(), err))
+			s.SetError(fmt.Errorf("getDeleteStateObject (%x) error: %w", addr.Bytes(), err))
 			return nil
 		}
 		if data == nil {
@@ -1310,7 +1310,7 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool, opts ...statecon
 func (s *StateDB) Prepare(rules params.Rules, sender, coinbase common.Address, dst *common.Address, precompiles []common.Address, list types.AccessList) {
 	if rules.IsBerlin {
 		// Clear out any leftover from previous executions
-		al := newAccessList()
+		al := NewAccessList()
 		s.accessList = al
 
 		al.AddAddress(sender)
@@ -1332,7 +1332,7 @@ func (s *StateDB) Prepare(rules params.Rules, sender, coinbase common.Address, d
 		}
 	}
 	// Reset transient storage at the beginning of transaction execution
-	s.transientStorage = newTransientStorage()
+	s.transientStorage = NewTransientStorage()
 }
 
 // AddAddressToAccessList adds the given address to the access list
@@ -1403,4 +1403,23 @@ func copy2DSet[k comparable](set map[k]map[common.Hash][]byte) map[k]map[common.
 		}
 	}
 	return copied
+}
+
+func (s *StateDB) GetExtra(addr common.Address) *types.StateAccountExtra {
+	stateObject := s.getStateObject(addr)
+	if stateObject != nil {
+		return stateObject.data.Extra
+	}
+	return nil
+}
+
+func (s *StateDB) SetExtra(addr common.Address, extra *types.StateAccountExtra) {
+	stateObject := s.getOrNewStateObject(addr)
+	if stateObject == nil {
+		return
+	}
+	if extra == nil {
+		extra = &types.StateAccountExtra{}
+	}
+	stateObject.SetExtra(*extra)
 }

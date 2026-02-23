@@ -20,16 +20,16 @@ import (
 	"github.com/ava-labs/libevm/common"
 )
 
-// transientStorage is a representation of EIP-1153 "Transient Storage".
-type transientStorage map[common.Address]Storage
+// TransientStorage is a representation of EIP-1153 "Transient Storage".
+type TransientStorage map[common.Address]Storage
 
-// newTransientStorage creates a new instance of a transientStorage.
-func newTransientStorage() transientStorage {
-	return make(transientStorage)
+// NewTransientStorage creates a new instance of a transientStorage.
+func NewTransientStorage() TransientStorage {
+	return make(TransientStorage)
 }
 
 // Set sets the transient-storage `value` for `key` at the given `addr`.
-func (t transientStorage) Set(addr common.Address, key, value common.Hash) {
+func (t TransientStorage) Set(addr common.Address, key, value common.Hash) {
 	if _, ok := t[addr]; !ok {
 		t[addr] = make(Storage)
 	}
@@ -37,7 +37,7 @@ func (t transientStorage) Set(addr common.Address, key, value common.Hash) {
 }
 
 // Get gets the transient storage for `key` at the given `addr`.
-func (t transientStorage) Get(addr common.Address, key common.Hash) common.Hash {
+func (t TransientStorage) Get(addr common.Address, key common.Hash) common.Hash {
 	val, ok := t[addr]
 	if !ok {
 		return common.Hash{}
@@ -46,8 +46,8 @@ func (t transientStorage) Get(addr common.Address, key common.Hash) common.Hash 
 }
 
 // Copy does a deep copy of the transientStorage
-func (t transientStorage) Copy() transientStorage {
-	storage := make(transientStorage)
+func (t TransientStorage) Copy() TransientStorage {
+	storage := make(TransientStorage)
 	for key, value := range t {
 		storage[key] = value.Copy()
 	}

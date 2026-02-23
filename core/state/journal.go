@@ -18,6 +18,7 @@ package state
 
 import (
 	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/core/types"
 	"github.com/holiman/uint256"
 )
 
@@ -148,6 +149,11 @@ type (
 	transientStorageChange struct {
 		account       *common.Address
 		key, prevalue common.Hash
+	}
+
+	extraChange struct {
+		address *common.Address
+		prev    types.StateAccountExtra
 	}
 )
 
@@ -297,4 +303,10 @@ func (ch accessListAddSlotChange) revert(s *StateDB) {
 
 func (ch accessListAddSlotChange) dirtied() *common.Address {
 	return nil
+}
+
+func (e extraChange) dirtied() *common.Address { return e.address }
+
+func (e extraChange) revert(s *StateDB) {
+	s.getStateObject(*e.address).setExtra(e.prev)
 }

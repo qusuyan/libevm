@@ -78,9 +78,9 @@ func payloadsAndConstructors[
 			(*Block).extraPayload,
 			func(b *Block, t *pseudo.Type) { b.extra = t },
 		),
-		StateAccount: pseudo.NewAccessor[StateOrSlimAccount, SA](
-			func(a StateOrSlimAccount) *pseudo.Type { return a.extra().payload() },
-			func(a StateOrSlimAccount, t *pseudo.Type) { a.extra().t = t },
+		StateAccount: pseudo.NewAccessor[**StateAccountExtra, SA](
+			func(a **StateAccountExtra) *pseudo.Type { return getOrSetNewStateAccountExtra(a).payload() },
+			func(a **StateAccountExtra, t *pseudo.Type) { getOrSetNewStateAccountExtra(a).t = t },
 		),
 	}
 	ctors := &extraConstructors{
@@ -239,7 +239,7 @@ type ExtraPayloads[HPtr HeaderHooks, BPtr BlockBodyPayload[BPtr], SA any] struct
 	Header       pseudo.Accessor[*Header, HPtr]
 	Block        pseudo.Accessor[*Block, BPtr]
 	Body         pseudo.Accessor[*Body, BPtr]
-	StateAccount pseudo.Accessor[StateOrSlimAccount, SA] // Also provides [SlimAccount] access.
+	StateAccount pseudo.Accessor[**StateAccountExtra, SA] // Also provides [SlimAccount] access.
 }
 
 func (e ExtraPayloads[HPtr, BPtr, SA]) hooksFromHeader(h *Header) HeaderHooks  { return e.Header.Get(h) }
@@ -288,18 +288,6 @@ func (b *Block) cloneExtra() *pseudo.Type {
 		return r.Get().hooks.cloneBlockPayload(b)
 	}
 	return nil
-}
-
-// StateOrSlimAccount is implemented by both [StateAccount] and [SlimAccount],
-// allowing for their [StateAccountExtra] payloads to be accessed in a type-safe
-// manner by [ExtraPayloads] instances.
-type StateOrSlimAccount interface {
-	extra() *StateAccountExtra
-}
-
-var _ = []StateOrSlimAccount{
-	(*StateAccount)(nil),
-	(*SlimAccount)(nil),
 }
 
 // A StateAccountExtra carries the `SA` extra payload, if any, registered with
