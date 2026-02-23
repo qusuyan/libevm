@@ -17,8 +17,6 @@
 package vm
 
 import (
-	"fmt"
-
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/common/math"
 	"github.com/ava-labs/libevm/crypto"
@@ -27,12 +25,12 @@ import (
 
 // Config are the configuration options for the Interpreter
 type Config struct {
-	Tracer                   EVMLogger // Opcode logger
-	NoBaseFee                bool      // Forces the EIP-1559 baseFee to 0 (needed for 0 price calls)
-	EnablePreimageRecording  bool      // Enables recording of SHA3/keccak preimages
-	ParallelExecutionEnabled bool      // Enables speculative tx-state execution path in callers that opt in
-	ParallelExecutionWorkers int       // Worker count hint for parallel tx execution (0 means runtime default)
-	ExtraEips                []int     // Additional EIPS that are to be enabled
+	Tracer                  EVMLogger // Opcode logger
+	NoBaseFee               bool      // Forces the EIP-1559 baseFee to 0 (needed for 0 price calls)
+	EnablePreimageRecording bool      // Enables recording of SHA3/keccak preimages
+	ParallelExecutionEnabled bool     // Enables speculative tx-state execution path in callers that opt in
+	ParallelExecutionWorkers int      // Worker count hint for parallel tx execution (0 means runtime default)
+	ExtraEips               []int     // Additional EIPS that are to be enabled
 }
 
 // ScopeContext contains the things that are per-call, such as stack and memory,
@@ -192,7 +190,6 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		if !contract.UseGas(cost) {
 			return nil, ErrOutOfGas
 		}
-		var dynamicCost uint64
 		if operation.dynamicGas != nil {
 			// All ops with a dynamic memory usage also has a dynamic gas cost.
 			var memorySize uint64
@@ -213,6 +210,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			}
 			// Consume the gas and return an error if not enough gas is available.
 			// cost is explicitly set so that the capture state defer method can get the proper cost
+			var dynamicCost uint64
 			dynamicCost, err = operation.dynamicGas(in.evm, contract, stack, mem, memorySize)
 			cost += dynamicCost // for tracing
 			if err != nil || !contract.UseGas(dynamicCost) {
@@ -231,7 +229,6 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			logged = true
 		}
 		// execute the operation
-		fmt.Printf("== %s (%d, %d) ==\n", op, operation.constantGas, dynamicCost)
 		res, err = operation.execute(&pc, in, callContext)
 		if err != nil {
 			break
