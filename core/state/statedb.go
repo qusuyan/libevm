@@ -936,7 +936,7 @@ func (s *StateDB) SetTxContext(thash common.Hash, ti int) {
 func (s *StateDB) clearJournalAndRefund() {
 	fmt.Printf("Clear journal: \n")
 	for _, entry := range s.journal.entries {
-		fmt.Printf("\t%T %x: %v\n", entry, *entry.dirtied(), entry)
+		fmt.Printf("\t%T %x: %v\n", entry, entry.dirtied(), entry)
 	}
 	if len(s.journal.entries) > 0 {
 		s.journal = newJournal()
