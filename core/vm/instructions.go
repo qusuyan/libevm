@@ -17,6 +17,7 @@
 package vm
 
 import (
+	"fmt"
 	"math"
 
 	"github.com/ava-labs/libevm/common"
@@ -138,6 +139,7 @@ func opEq(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte,
 
 func opIszero(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	x := scope.Stack.peek()
+	fmt.Printf("IsZero(%x)\n", *x)
 	if x.IsZero() {
 		x.SetOne()
 	} else {
