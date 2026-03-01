@@ -67,8 +67,8 @@ func TestParallelReaderGetAccountAndStateTrieBacked(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetAccount failed: %v", err)
 	}
-	if !account.Exists {
-		t.Fatal("expected account to exist")
+	if account == nil || account.Data == nil {
+		t.Fatal("expected account cache with state data")
 	}
 	if got := account.Data.Nonce; got != 11 {
 		t.Fatalf("unexpected nonce: %d", got)
@@ -96,8 +96,8 @@ func TestParallelReaderGetAccountAndStateSnapshotBacked(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetAccount failed: %v", err)
 	}
-	if !account.Exists {
-		t.Fatal("expected account to exist")
+	if account == nil || account.Data == nil {
+		t.Fatal("expected account cache with state data")
 	}
 	if got := account.Data.Nonce; got != 11 {
 		t.Fatalf("unexpected nonce: %d", got)
@@ -174,8 +174,8 @@ func TestParallelReaderConcurrentSnapshotReads(t *testing.T) {
 				errCh <- err
 				return
 			}
-			if !account.Exists {
-				errCh <- testingError("expected account to exist")
+			if account == nil || account.Data == nil {
+				errCh <- testingError("expected account cache with state data")
 				return
 			}
 			if got := account.Data.Nonce; got != 11 {

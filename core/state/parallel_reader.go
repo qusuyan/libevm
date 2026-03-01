@@ -17,7 +17,6 @@ import (
 // StateDB without sharing live stateObjects across execution contexts.
 type ParallelAccountCache struct {
 	Address common.Address
-	Exists  bool
 	Data    *types.StateAccount
 	Code    []byte
 
@@ -43,7 +42,6 @@ func (c *ParallelAccountCache) Clone() *ParallelAccountCache {
 	}
 	return &ParallelAccountCache{
 		Address: c.Address,
-		Exists:  c.Exists,
 		Data:    data,
 		Code:    common.CopyBytes(c.Code),
 		Storage: storage,
@@ -105,7 +103,7 @@ func (r *ParallelReader) GetAccount(addr common.Address) (*ParallelAccountCache,
 			return r.newAccountCache(addr, data)
 		}
 		if err == nil && !exists {
-			return &ParallelAccountCache{Address: addr, Exists: false}, nil
+			return nil, nil
 		}
 	}
 	data, exists, err = r.getAccountFromTrie(addr)
@@ -113,7 +111,7 @@ func (r *ParallelReader) GetAccount(addr common.Address) (*ParallelAccountCache,
 		return nil, err
 	}
 	if !exists {
-		return &ParallelAccountCache{Address: addr, Exists: false}, nil
+		return nil, nil
 	}
 	return r.newAccountCache(addr, data)
 }
@@ -127,7 +125,7 @@ func (r *ParallelReader) GetState(addr common.Address, slot common.Hash, opts ..
 	if err != nil {
 		return common.Hash{}, err
 	}
-	if account == nil || !account.Exists || account.Data == nil {
+	if account == nil || account.Data == nil {
 		return common.Hash{}, nil
 	}
 	if r.snap != nil {
@@ -161,7 +159,6 @@ func (r *ParallelReader) GetState(addr common.Address, slot common.Hash, opts ..
 func (r *ParallelReader) newAccountCache(addr common.Address, data *types.StateAccount) (*ParallelAccountCache, error) {
 	cache := &ParallelAccountCache{
 		Address: addr,
-		Exists:  true,
 		Data:    data.Copy(),
 	}
 	if data == nil || bytes.Equal(data.CodeHash, types.EmptyCodeHash.Bytes()) {
@@ -226,7 +223,7 @@ func (s *StateDB) PreloadParallelAccount(cache *ParallelAccountCache) error {
 	if s == nil {
 		return fmt.Errorf("nil statedb")
 	}
-	if cache == nil || !cache.Exists || cache.Data == nil {
+	if cache == nil || cache.Data == nil {
 		return nil
 	}
 	if _, exists := s.stateObjects[cache.Address]; exists {
