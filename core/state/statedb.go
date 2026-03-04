@@ -384,6 +384,7 @@ func (s *StateDB) AddBalance(addr common.Address, amount *uint256.Int) {
 	stateObject := s.getOrNewStateObject(addr)
 	if stateObject != nil {
 		stateObject.AddBalance(amount)
+		fmt.Printf("statedb: SetBalance(%x) -> %d\n", addr, stateObject.Balance())
 	}
 }
 
@@ -392,6 +393,7 @@ func (s *StateDB) SubBalance(addr common.Address, amount *uint256.Int) {
 	stateObject := s.getOrNewStateObject(addr)
 	if stateObject != nil {
 		stateObject.SubBalance(amount)
+		fmt.Printf("statedb: SetBalance(%x) -> %d\n", addr, stateObject.Balance())
 	}
 }
 
@@ -399,6 +401,7 @@ func (s *StateDB) SetBalance(addr common.Address, amount *uint256.Int) {
 	stateObject := s.getOrNewStateObject(addr)
 	if stateObject != nil {
 		stateObject.SetBalance(amount)
+		fmt.Printf("statedb: SetBalance(%x) -> %d\n", addr, stateObject.Balance())
 	}
 }
 
@@ -406,6 +409,7 @@ func (s *StateDB) SetNonce(addr common.Address, nonce uint64) {
 	stateObject := s.getOrNewStateObject(addr)
 	if stateObject != nil {
 		stateObject.SetNonce(nonce)
+		fmt.Printf("statedb: SetNonce(%x) -> %d\n", addr, stateObject.Nonce())
 	}
 }
 
@@ -413,6 +417,7 @@ func (s *StateDB) SetCode(addr common.Address, code []byte) {
 	stateObject := s.getOrNewStateObject(addr)
 	if stateObject != nil {
 		stateObject.SetCode(crypto.Keccak256Hash(code), code)
+		fmt.Printf("statedb: SetCode(%x) -> %d\n", addr, len(code))
 	}
 }
 
@@ -421,6 +426,7 @@ func (s *StateDB) SetState(addr common.Address, key, value common.Hash, opts ...
 	if stateObject != nil {
 		key = TransformStateKey(addr, key, opts...)
 		stateObject.SetState(key, value)
+		fmt.Printf("statedb: SetState(%x, %x) -> %x\n", addr, key, value)
 	}
 }
 
@@ -451,6 +457,7 @@ func (s *StateDB) SetStorage(addr common.Address, storage map[common.Hash]common
 // The account's state object is still available until the state is committed,
 // getStateObject will return a non-nil account after SelfDestruct.
 func (s *StateDB) SelfDestruct(addr common.Address) {
+	fmt.Printf("statedb: SelfDestruct(%x)\n", addr)
 	stateObject := s.getStateObject(addr)
 	if stateObject == nil {
 		return
@@ -685,6 +692,7 @@ func (s *StateDB) createObject(addr common.Address) (newobj, prev *stateObject) 
 //
 // Carrying over the balance ensures that Ether doesn't disappear.
 func (s *StateDB) CreateAccount(addr common.Address) {
+	fmt.Printf("statedb: CreateAccount(%x)\n", addr)
 	newObj, prev := s.createObject(addr)
 	if prev != nil {
 		newObj.setBalance(prev.data.Balance)
