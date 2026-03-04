@@ -567,3 +567,7 @@ func (s *stateObject) SetExtra(extra types.StateAccountExtra) {
 func (s *stateObject) setExtra(extra types.StateAccountExtra) {
 	s.data.Extra = &extra
 }
+
+func (s *stateObject) String() string {
+	return s.data.String() + ", Dirty States: " + fmt.Sprint(s.dirtyStorage)
+}

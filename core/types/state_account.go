@@ -38,6 +38,10 @@ type StateAccount struct {
 	Extra *StateAccountExtra // only access via [ExtraPayloads] instances
 }
 
+func (acct *StateAccount) String() string {
+	return "StateAccount{Nonce: " + string(acct.Nonce) + ", Balance: " + acct.Balance.String() + ", Root: " + acct.Root.String() + ", CodeHash: " + common.Bytes2Hex(acct.CodeHash) + "}"
+}
+
 // NewEmptyStateAccount constructs an empty state account.
 func NewEmptyStateAccount() *StateAccount {
 	return &StateAccount{
