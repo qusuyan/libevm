@@ -17,6 +17,7 @@
 package vm
 
 import (
+	"fmt"
 	"math/big"
 	"sync/atomic"
 
@@ -435,6 +436,7 @@ func (c *codeAndHash) Hash() common.Hash {
 
 // createCommon creates a new contract using code as deployment code.
 func (evm *EVM) createCommon(caller ContractRef, codeAndHash *codeAndHash, gas uint64, value *uint256.Int, address common.Address, typ OpCode) ([]byte, common.Address, uint64, error) {
+	fmt.Printf("evm.go: %x, %v\n", codeAndHash.Hash(), codeAndHash.code)
 	// Depth check execution. Fail if we're trying to execute above the
 	// limit.
 	if evm.depth > int(params.CallCreateDepth) {
