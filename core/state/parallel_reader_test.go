@@ -79,7 +79,7 @@ func TestParallelReaderGetAccountAndStateTrieBacked(t *testing.T) {
 	if string(account.Code) != string(code) {
 		t.Fatalf("unexpected code: %x", account.Code)
 	}
-	value, err := reader.GetState(addr, slot)
+	value, err := reader.GetState(addr, account.Data.Root, slot)
 	if err != nil {
 		t.Fatalf("GetState failed: %v", err)
 	}
@@ -108,11 +108,24 @@ func TestParallelReaderGetAccountAndStateSnapshotBacked(t *testing.T) {
 	if string(account.Code) != string(code) {
 		t.Fatalf("unexpected code: %x", account.Code)
 	}
-	value, err := reader.GetState(addr, slot)
+	value, err := reader.GetState(addr, account.Data.Root, slot)
 	if err != nil {
 		t.Fatalf("GetState failed: %v", err)
 	}
 	if value != slotVal {
+		t.Fatalf("unexpected slot value: %x", value)
+	}
+}
+
+func TestParallelReaderGetStateEmptyRoot(t *testing.T) {
+	statedb, _, slot, _, _ := newParallelReaderTestState(t, false)
+
+	reader := NewParallelReader(statedb)
+	value, err := reader.GetState(common.HexToAddress("0xbeef"), types.EmptyRootHash, slot)
+	if err != nil {
+		t.Fatalf("GetState failed: %v", err)
+	}
+	if value != (common.Hash{}) {
 		t.Fatalf("unexpected slot value: %x", value)
 	}
 }
@@ -190,7 +203,7 @@ func TestParallelReaderConcurrentSnapshotReads(t *testing.T) {
 				errCh <- testingErrorf("unexpected code: %x", account.Code)
 				return
 			}
-			value, err := local.GetState(addr, slot)
+			value, err := local.GetState(addr, account.Data.Root, slot)
 			if err != nil {
 				errCh <- err
 				return

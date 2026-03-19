@@ -8,7 +8,6 @@ import (
 	"github.com/ava-labs/libevm/core/state/snapshot"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/crypto"
-	"github.com/ava-labs/libevm/libevm/stateconf"
 	"github.com/ava-labs/libevm/rlp"
 )
 
@@ -116,16 +115,11 @@ func (r *ParallelReader) GetAccount(addr common.Address) (*ParallelAccountCache,
 	return r.newAccountCache(addr, data)
 }
 
-func (r *ParallelReader) GetState(addr common.Address, slot common.Hash, opts ...stateconf.StateDBStateOption) (common.Hash, error) {
+func (r *ParallelReader) GetState(addr common.Address, root common.Hash, slot common.Hash) (common.Hash, error) {
 	if r == nil {
 		return common.Hash{}, fmt.Errorf("nil parallel reader")
 	}
-	slot = TransformStateKey(addr, slot, opts...)
-	account, err := r.GetAccount(addr)
-	if err != nil {
-		return common.Hash{}, err
-	}
-	if account == nil || account.Data == nil {
+	if root == types.EmptyRootHash {
 		return common.Hash{}, nil
 	}
 	if r.snap != nil {
@@ -143,7 +137,7 @@ func (r *ParallelReader) GetState(addr common.Address, slot common.Hash, opts ..
 			return value, nil
 		}
 	}
-	tr, err := r.getStorageTrie(addr, account.Data.Root)
+	tr, err := r.getStorageTrie(addr, root)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -240,5 +234,14 @@ func (s *StateDB) PreloadParallelAccount(cache *ParallelAccountCache) error {
 		}
 	}
 	s.setStateObject(obj)
+	return nil
+}
+
+func (s *StateDB) PreloadParallelAccountsSlice(caches []*ParallelAccountCache) error {
+	for _, cache := range caches {
+		if err := s.PreloadParallelAccount(cache); err != nil {
+			return err
+		}
+	}
 	return nil
 }
