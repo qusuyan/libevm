@@ -28,7 +28,8 @@ type Config struct {
 	Tracer                   EVMLogger // Opcode logger
 	NoBaseFee                bool      // Forces the EIP-1559 baseFee to 0 (needed for 0 price calls)
 	EnablePreimageRecording  bool      // Enables recording of SHA3/keccak preimages
-	ParallelExecutionType    string    // Selects the speculative tx-state execution strategy in callers that opt in
+	ParallelExecutionType    any       // Stores a parallel executor factory for callers that opt in
+	ParallelTxnStateType     any       // Stores a speculative txn-state factory for callers that opt in
 	ParallelExecutionWorkers int       // Worker count hint for parallel tx execution (0 means runtime default)
 	ExtraEips                []int     // Additional EIPS that are to be enabled
 }
