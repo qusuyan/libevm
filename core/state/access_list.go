@@ -54,6 +54,16 @@ func NewAccessList() *AccessList {
 	}
 }
 
+// Reset clears the access list while retaining the backing maps/slices for reuse.
+func (al *AccessList) Reset() {
+	clear(al.addresses)
+	for i := range al.slots {
+		clear(al.slots[i])
+		al.slots[i] = nil
+	}
+	al.slots = al.slots[:0]
+}
+
 // Copy creates an independent copy of an accessList.
 func (a *AccessList) Copy() *AccessList {
 	cp := NewAccessList()

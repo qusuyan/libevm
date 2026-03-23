@@ -20,31 +20,7 @@ type ParallelAccountCache struct {
 	Code    []byte
 
 	// Storage holds committed storage values already observed for this account.
-	Storage map[common.Hash]common.Hash
-}
-
-func (c *ParallelAccountCache) Clone() *ParallelAccountCache {
-	if c == nil {
-		return nil
-	}
-
-	var data *types.StateAccount
-	if c.Data != nil {
-		data = c.Data.Copy()
-	}
-	var storage map[common.Hash]common.Hash
-	if len(c.Storage) > 0 {
-		storage = make(map[common.Hash]common.Hash, len(c.Storage))
-		for key, value := range c.Storage {
-			storage[key] = value
-		}
-	}
-	return &ParallelAccountCache{
-		Address: c.Address,
-		Data:    data,
-		Code:    common.CopyBytes(c.Code),
-		Storage: storage,
-	}
+	Storage Storage
 }
 
 type ParallelReader struct {
@@ -153,7 +129,7 @@ func (r *ParallelReader) GetState(addr common.Address, root common.Hash, slot co
 func (r *ParallelReader) newAccountCache(addr common.Address, data *types.StateAccount) (*ParallelAccountCache, error) {
 	cache := &ParallelAccountCache{
 		Address: addr,
-		Data:    data.Copy(),
+		Data:    data,
 	}
 	if data == nil || bytes.Equal(data.CodeHash, types.EmptyCodeHash.Bytes()) {
 		return cache, nil
@@ -162,7 +138,7 @@ func (r *ParallelReader) newAccountCache(addr common.Address, data *types.StateA
 	if err != nil {
 		return nil, err
 	}
-	cache.Code = common.CopyBytes(code)
+	cache.Code = code
 	return cache, nil
 }
 
@@ -223,25 +199,14 @@ func (s *StateDB) PreloadParallelAccount(cache *ParallelAccountCache) error {
 	if _, exists := s.stateObjects[cache.Address]; exists {
 		return nil
 	}
-	obj := newObject(s, cache.Address, cache.Data.Copy())
-	obj.data = *cache.Data.Copy()
-	obj.origin = cache.Data.Copy()
-	obj.code = Code(common.CopyBytes(cache.Code))
-	if len(cache.Storage) > 0 {
-		obj.originStorage = make(Storage, len(cache.Storage))
-		for key, value := range cache.Storage {
-			obj.originStorage[key] = value
-		}
+	// This hook is only used during ordered WriteBack, after speculative
+	// BlockState caches are no longer read. Under that contract we can reuse the
+	// cached account payload directly instead of deep-copying it again here.
+	obj := newObject(s, cache.Address, cache.Data)
+	obj.code = Code(cache.Code)
+	if cache.Storage != nil {
+		obj.originStorage = cache.Storage
 	}
 	s.setStateObject(obj)
-	return nil
-}
-
-func (s *StateDB) PreloadParallelAccountsSlice(caches []*ParallelAccountCache) error {
-	for _, cache := range caches {
-		if err := s.PreloadParallelAccount(cache); err != nil {
-			return err
-		}
-	}
 	return nil
 }
