@@ -91,39 +91,38 @@ func (r *ParallelReader) GetAccount(addr common.Address) (*ParallelAccountCache,
 	return r.newAccountCache(addr, data)
 }
 
-func (r *ParallelReader) GetState(addr common.Address, root common.Hash, slot common.Hash) (common.Hash, error) {
+func (r *ParallelReader) GetState(addr common.Address, root common.Hash, slot common.Hash) (*common.Hash, error) {
 	if r == nil {
-		return common.Hash{}, fmt.Errorf("nil parallel reader")
+		return nil, fmt.Errorf("nil parallel reader")
 	}
 	if root == types.EmptyRootHash {
-		return common.Hash{}, nil
+		return nil, nil
 	}
 	if r.snap != nil {
 		enc, err := r.snap.Storage(crypto.HashData(r.hasher, addr.Bytes()), crypto.Keccak256Hash(slot.Bytes()))
 		if err == nil {
 			if len(enc) == 0 {
-				return common.Hash{}, nil
+				return nil, nil
 			}
-			value := common.Hash{}
 			_, content, _, err := rlp.Split(enc)
 			if err != nil {
-				return common.Hash{}, err
+				return nil, err
 			}
-			value.SetBytes(content)
-			return value, nil
+			value := common.BytesToHash(content)
+			return &value, nil
 		}
 	}
 	tr, err := r.getStorageTrie(addr, root)
 	if err != nil {
-		return common.Hash{}, err
+		return nil, err
 	}
 	val, err := tr.GetStorage(addr, slot.Bytes())
 	if err != nil {
-		return common.Hash{}, err
+		return nil, err
 	}
 	value := common.Hash{}
 	value.SetBytes(val)
-	return value, nil
+	return &value, nil
 }
 
 func (r *ParallelReader) newAccountCache(addr common.Address, data *types.StateAccount) (*ParallelAccountCache, error) {
