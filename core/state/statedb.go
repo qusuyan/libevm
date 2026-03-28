@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"maps"
 	"sort"
+	"sync/atomic"
 	"time"
 
 	"github.com/ava-labs/libevm/common"
@@ -209,6 +210,34 @@ func (s *StateDB) SetError(err error) {
 // Error returns the memorized database failure occurred earlier.
 func (s *StateDB) Error() error {
 	return s.dbErr
+}
+
+func (s *StateDB) addAccountReadDuration(d time.Duration) {
+	if s == nil || d <= 0 {
+		return
+	}
+	atomic.AddInt64((*int64)(&s.AccountReads), int64(d))
+}
+
+func (s *StateDB) addSnapshotAccountReadDuration(d time.Duration) {
+	if s == nil || d <= 0 {
+		return
+	}
+	atomic.AddInt64((*int64)(&s.SnapshotAccountReads), int64(d))
+}
+
+func (s *StateDB) addStorageReadDuration(d time.Duration) {
+	if s == nil || d <= 0 {
+		return
+	}
+	atomic.AddInt64((*int64)(&s.StorageReads), int64(d))
+}
+
+func (s *StateDB) addSnapshotStorageReadDuration(d time.Duration) {
+	if s == nil || d <= 0 {
+		return
+	}
+	atomic.AddInt64((*int64)(&s.SnapshotStorageReads), int64(d))
 }
 
 func (s *StateDB) AddLog(log *types.Log) {
@@ -576,7 +605,7 @@ func (s *StateDB) getDeletedStateObject(addr common.Address) *stateObject {
 		start := time.Now()
 		acc, err := s.snap.Account(crypto.HashData(s.hasher, addr.Bytes()))
 		if metrics.EnabledExpensive {
-			s.SnapshotAccountReads += time.Since(start)
+			s.addSnapshotAccountReadDuration(time.Since(start))
 		}
 		if err == nil {
 			if acc == nil {
@@ -603,7 +632,7 @@ func (s *StateDB) getDeletedStateObject(addr common.Address) *stateObject {
 		var err error
 		data, err = s.trie.GetAccount(addr)
 		if metrics.EnabledExpensive {
-			s.AccountReads += time.Since(start)
+			s.addAccountReadDuration(time.Since(start))
 		}
 		if err != nil {
 			s.SetError(fmt.Errorf("getDeleteStateObject (%x) error: %w", addr.Bytes(), err))

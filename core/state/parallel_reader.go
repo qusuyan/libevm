@@ -3,11 +3,13 @@ package state
 import (
 	"bytes"
 	"fmt"
+	"time"
 
 	"github.com/ava-labs/libevm/common"
 	"github.com/ava-labs/libevm/core/state/snapshot"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/crypto"
+	"github.com/ava-labs/libevm/metrics"
 	"github.com/ava-labs/libevm/rlp"
 )
 
@@ -24,6 +26,7 @@ type ParallelAccountCache struct {
 }
 
 type ParallelReader struct {
+	base         *StateDB
 	db           Database
 	trie         Trie
 	snaps        SnapshotTree
@@ -38,6 +41,7 @@ func NewParallelReader(base *StateDB) *ParallelReader {
 		return nil
 	}
 	return &ParallelReader{
+		base:         base,
 		db:           base.db,
 		trie:         base.db.CopyTrie(base.trie),
 		snaps:        base.snaps,
@@ -53,6 +57,7 @@ func (r *ParallelReader) Copy() *ParallelReader {
 		return nil
 	}
 	return &ParallelReader{
+		base:         r.base,
 		db:           r.db,
 		trie:         r.db.CopyTrie(r.trie),
 		snaps:        r.snaps,
@@ -99,7 +104,11 @@ func (r *ParallelReader) GetState(addr common.Address, root common.Hash, slot co
 		return nil, nil
 	}
 	if r.snap != nil {
+		start := time.Now()
 		enc, err := r.snap.Storage(crypto.HashData(r.hasher, addr.Bytes()), crypto.Keccak256Hash(slot.Bytes()))
+		if metrics.EnabledExpensive {
+			r.base.addSnapshotStorageReadDuration(time.Since(start))
+		}
 		if err == nil {
 			if len(enc) == 0 {
 				return nil, nil
@@ -112,11 +121,15 @@ func (r *ParallelReader) GetState(addr common.Address, root common.Hash, slot co
 			return &value, nil
 		}
 	}
+	start := time.Now()
 	tr, err := r.getStorageTrie(addr, root)
 	if err != nil {
 		return nil, err
 	}
 	val, err := tr.GetStorage(addr, slot.Bytes())
+	if metrics.EnabledExpensive {
+		r.base.addStorageReadDuration(time.Since(start))
+	}
 	if err != nil {
 		return nil, err
 	}

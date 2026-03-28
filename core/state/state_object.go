@@ -198,7 +198,7 @@ func (s *stateObject) GetCommittedState(key common.Hash) common.Hash {
 		start := time.Now()
 		enc, err = s.db.snap.Storage(s.addrHash, crypto.Keccak256Hash(key.Bytes()))
 		if metrics.EnabledExpensive {
-			s.db.SnapshotStorageReads += time.Since(start)
+			s.db.addSnapshotStorageReadDuration(time.Since(start))
 		}
 		if len(enc) > 0 {
 			_, content, _, err := rlp.Split(enc)
@@ -218,7 +218,7 @@ func (s *stateObject) GetCommittedState(key common.Hash) common.Hash {
 		}
 		val, err := tr.GetStorage(s.address, key.Bytes())
 		if metrics.EnabledExpensive {
-			s.db.StorageReads += time.Since(start)
+			s.db.addStorageReadDuration(time.Since(start))
 		}
 		if err != nil {
 			s.db.SetError(err)
