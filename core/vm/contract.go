@@ -17,6 +17,8 @@
 package vm
 
 import (
+	"sync/atomic"
+
 	"github.com/ava-labs/libevm/common"
 	"github.com/holiman/uint256"
 )
@@ -58,6 +60,8 @@ type Contract struct {
 
 	Gas   uint64
 	value *uint256.Int
+
+	topLevelGasConsumed *atomic.Uint64
 }
 
 // NewContract returns a new contract environment for the execution of EVM.
@@ -67,6 +71,7 @@ func NewContract(caller ContractRef, object ContractRef, value *uint256.Int, gas
 	if parent, ok := caller.(*Contract); ok {
 		// Reuse JUMPDEST analysis from parent context if available.
 		c.jumpdests = parent.jumpdests
+		c.topLevelGasConsumed = parent.topLevelGasConsumed
 	} else {
 		c.jumpdests = make(map[common.Hash]bitvec)
 	}
@@ -156,13 +161,37 @@ func (c *Contract) Caller() common.Address {
 	return c.CallerAddress
 }
 
-// UseGas attempts the use gas and subtracts it and returns true on success
+// UseGas records real gas consumption in the current frame and mirrors that
+// spend into the shared EVM-wide consumed-gas signal when a tracker is present.
 func (c *Contract) UseGas(gas uint64) (ok bool) {
 	if c.Gas < gas {
 		return false
 	}
 	c.Gas -= gas
+	if c.topLevelGasConsumed != nil {
+		c.topLevelGasConsumed.Add(gas)
+	}
 	return true
+}
+
+// TransferGas moves gas out of the current frame without marking it as
+// consumed. Child frames that actually spend that gas should account for it.
+func (c *Contract) TransferGas(gas uint64) bool {
+	if c.Gas < gas {
+		return false
+	}
+	c.Gas -= gas
+	return true
+}
+
+// ReturnGas adds unused gas back to the local frame without reducing the
+// accumulated top-level gas-consumed signal.
+func (c *Contract) ReturnGas(gas uint64) {
+	c.Gas += gas
+}
+
+func (c *Contract) attachTopLevelGasTracker(consumed *atomic.Uint64) {
+	c.topLevelGasConsumed = consumed
 }
 
 // Address returns the contracts address

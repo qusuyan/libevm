@@ -124,10 +124,17 @@ type EVM struct {
 	interpreter *EVMInterpreter
 	// abort is used to abort the EVM calling operations
 	abort atomic.Bool
-	// callGasTemp holds the gas available for the current call. This is needed because the
-	// available gas is calculated in gasCall* according to the 63/64 rule and later
-	// applied in opCall*.
-	callGasTemp uint64
+	// forwardedCallGas holds the child-call gas selected by the current
+	// call-like opcode. opCall* later uses it as the callee's gas budget, while
+	// the consumed-gas tracker excludes it from the parent frame's own gas burn.
+	forwardedCallGas uint64
+
+	// Top-level gas progress is sampled concurrently by the parallel executor.
+	// Only this atomic field is intended to be read concurrently; the rest of
+	// the EVM remains single-threaded and is not generally thread safe.
+	// topLevelGasConsumed is cumulative across every top-level run executed by
+	// this EVM instance.
+	topLevelGasConsumed atomic.Uint64
 
 	// libevm
 	executionInvalidated error // see [EVM.InvalidateExecution]
@@ -160,11 +167,26 @@ func NewEVM(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig
 	return evm
 }
 
+func (evm *EVM) attachTopLevelGasTracker(contract *Contract) {
+	contract.attachTopLevelGasTracker(&evm.topLevelGasConsumed)
+}
+
 // Reset resets the EVM with a new transaction context.Reset
 // This is not threadsafe and should only be done very cautiously.
 func (evm *EVM) Reset(txCtx TxContext, statedb StateDB) {
 	evm.executionInvalidated = nil // see [EVM.InvalidateExecution]
+	evm.resetTopLevelGasTrackingWindow()
 	evm.TxContext, evm.StateDB = evm.overrideEVMResetArgs(txCtx, statedb)
+}
+
+func (evm *EVM) beginTopLevelGasTrackingIfRoot(gas uint64) func() {
+	if evm.depth != 0 {
+		return nil
+	}
+	evm.beginTopLevelGasTracking(gas)
+	return func() {
+		evm.endTopLevelGasTracking()
+	}
 }
 
 // Cancel cancels any running EVM operation. This may be called concurrently and
@@ -248,6 +270,7 @@ func (evm *EVM) call(caller ContractRef, addr common.Address, input []byte, gas 
 			// If the account has no code, we can abort here
 			// The depth-check is already done, and precompiles handled above
 			contract := NewContract(caller, AccountRef(addrCopy), value, gas)
+			evm.attachTopLevelGasTracker(contract)
 			contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), code)
 			ret, err = evm.interpreter.Run(contract, input, false)
 			gas = contract.Gas
@@ -259,6 +282,7 @@ func (evm *EVM) call(caller ContractRef, addr common.Address, input []byte, gas 
 	if err != nil {
 		evm.StateDB.RevertToSnapshot(snapshot)
 		if err != ErrExecutionReverted {
+			evm.consumeTopLevelGas(gas)
 			gas = 0
 		}
 		// TODO: consider clearing up unused snapshots:
@@ -276,6 +300,9 @@ func (evm *EVM) call(caller ContractRef, addr common.Address, input []byte, gas 
 // CallCode differs from Call in the sense that it executes the given address'
 // code with the caller as context.
 func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, gas uint64, value *uint256.Int) (ret []byte, leftOverGas uint64, err error) {
+	if endTracking := evm.beginTopLevelGasTrackingIfRoot(gas); endTracking != nil {
+		defer endTracking()
+	}
 	// Fail if we're trying to execute above the call depth limit
 	if evm.depth > int(params.CallCreateDepth) {
 		return nil, gas, ErrDepth
@@ -306,6 +333,7 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 		// Initialise a new contract and set the code that is to be used by the EVM.
 		// The contract is a scoped environment for this execution context only.
 		contract := NewContract(caller, AccountRef(caller.Address()), value, gas)
+		evm.attachTopLevelGasTracker(contract)
 		contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), evm.StateDB.GetCode(addrCopy))
 		ret, err = evm.interpreter.Run(contract, input, false)
 		gas = contract.Gas
@@ -313,6 +341,7 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 	if err != nil {
 		evm.StateDB.RevertToSnapshot(snapshot)
 		if err != ErrExecutionReverted {
+			evm.consumeTopLevelGas(gas)
 			gas = 0
 		}
 	}
@@ -325,6 +354,9 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 // DelegateCall differs from CallCode in the sense that it executes the given address'
 // code with the caller as context and the caller is set to the caller of the caller.
 func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []byte, gas uint64) (ret []byte, leftOverGas uint64, err error) {
+	if endTracking := evm.beginTopLevelGasTrackingIfRoot(gas); endTracking != nil {
+		defer endTracking()
+	}
 	// Fail if we're trying to execute above the call depth limit
 	if evm.depth > int(params.CallCreateDepth) {
 		return nil, gas, ErrDepth
@@ -351,6 +383,7 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 		addrCopy := addr
 		// Initialise a new contract and make initialise the delegate values
 		contract := NewContract(caller, AccountRef(caller.Address()), nil, gas).AsDelegate()
+		evm.attachTopLevelGasTracker(contract)
 		contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), evm.StateDB.GetCode(addrCopy))
 		ret, err = evm.interpreter.Run(contract, input, false)
 		gas = contract.Gas
@@ -358,6 +391,7 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 	if err != nil {
 		evm.StateDB.RevertToSnapshot(snapshot)
 		if err != ErrExecutionReverted {
+			evm.consumeTopLevelGas(gas)
 			gas = 0
 		}
 	}
@@ -369,6 +403,9 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 // Opcodes that attempt to perform such modifications will result in exceptions
 // instead of performing the modifications.
 func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte, gas uint64) (ret []byte, leftOverGas uint64, err error) {
+	if endTracking := evm.beginTopLevelGasTrackingIfRoot(gas); endTracking != nil {
+		defer endTracking()
+	}
 	// Fail if we're trying to execute above the call depth limit
 	if evm.depth > int(params.CallCreateDepth) {
 		return nil, gas, ErrDepth
@@ -405,6 +442,7 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 		// Initialise a new contract and set the code that is to be used by the EVM.
 		// The contract is a scoped environment for this execution context only.
 		contract := NewContract(caller, AccountRef(addrCopy), new(uint256.Int), gas)
+		evm.attachTopLevelGasTracker(contract)
 		contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), evm.StateDB.GetCode(addrCopy))
 		// When an error was returned by the EVM or when setting the creation code
 		// above we revert to the snapshot and consume any gas remaining. Additionally
@@ -415,6 +453,7 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 	if err != nil {
 		evm.StateDB.RevertToSnapshot(snapshot)
 		if err != ErrExecutionReverted {
+			evm.consumeTopLevelGas(gas)
 			gas = 0
 		}
 	}
@@ -456,6 +495,7 @@ func (evm *EVM) createCommon(caller ContractRef, codeAndHash *codeAndHash, gas u
 	// Ensure there's no existing contract already at the designated address
 	contractHash := evm.StateDB.GetCodeHash(address)
 	if evm.StateDB.GetNonce(address) != 0 || (contractHash != (common.Hash{}) && contractHash != types.EmptyCodeHash) {
+		evm.consumeTopLevelGas(gas)
 		return nil, common.Address{}, 0, ErrContractAddressCollision
 	}
 
@@ -464,7 +504,11 @@ func (evm *EVM) createCommon(caller ContractRef, codeAndHash *codeAndHash, gas u
 	// This check MUST be placed after the caller's nonce is incremented but
 	// before all other state-modifying behaviour, even if changes may be
 	// reverted to the snapshot.
+	originalGas := gas
 	gas, err := evm.canCreateContract(caller, address, gas)
+	if gas < originalGas {
+		evm.consumeTopLevelGas(originalGas - gas)
+	}
 	if err != nil {
 		return nil, common.Address{}, gas, err
 	}
@@ -481,6 +525,7 @@ func (evm *EVM) createCommon(caller ContractRef, codeAndHash *codeAndHash, gas u
 	// Initialise a new contract and set the code that is to be used by the EVM.
 	// The contract is a scoped environment for this execution context only.
 	contract := NewContract(caller, AccountRef(address), value, gas)
+	evm.attachTopLevelGasTracker(contract)
 	contract.SetCodeOptionalHash(&address, codeAndHash)
 
 	if evm.Config.Tracer != nil {

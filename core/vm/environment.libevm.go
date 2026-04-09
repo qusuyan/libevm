@@ -54,11 +54,10 @@ func (e *environment) BlockTime() uint64                 { return e.evm.Context.
 func (e *environment) InvalidateExecution(err error) { e.evm.InvalidateExecution(err) }
 
 func (e *environment) refundGas(add uint64) error {
-	gas, overflow := math.SafeAdd(e.self.Gas, add)
-	if overflow {
+	if _, overflow := math.SafeAdd(e.self.Gas, add); overflow {
 		return ErrGasUintOverflow
 	}
-	e.self.Gas = gas
+	e.self.ReturnGas(add)
 	return nil
 }
 
@@ -119,7 +118,7 @@ func (e *environment) callContract(typ CallType, addr common.Address, input []by
 	if e.ReadOnly() && value != nil && !value.IsZero() {
 		return nil, ErrWriteProtection
 	}
-	if !e.UseGas(gas) {
+	if !e.self.TransferGas(gas) {
 		return nil, ErrOutOfGas
 	}
 
@@ -132,6 +131,11 @@ func (e *environment) callContract(typ CallType, addr common.Address, input []by
 
 		startGas := gas
 		defer func() {
+			// NOTE: this helper predates the top-level consumed-gas tracker and
+			// still approximates nested precompile-call trace output using the
+			// enclosing precompile frame's remaining gas. That can differ from the
+			// child call's own gas-used value, so this path should be treated as a
+			// tracing/debugging limitation rather than an accounting source of truth.
 			t.CaptureEnd(retData, startGas-e.Gas(), retErr)
 		}()
 	}

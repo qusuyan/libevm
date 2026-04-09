@@ -178,9 +178,15 @@ func activePrecompiles(rules params.Rules) []common.Address {
 func (args *evmCallArgs) RunPrecompiledContract(p PrecompiledContract, input []byte, suppliedGas uint64) (ret []byte, remainingGas uint64, err error) {
 	gasCost := p.RequiredGas(input)
 	if suppliedGas < gasCost {
+		if args.evm != nil {
+			args.evm.consumeTopLevelGas(suppliedGas)
+		}
 		return nil, 0, ErrOutOfGas
 	}
 	suppliedGas -= gasCost
+	if args.evm != nil {
+		args.evm.consumeTopLevelGas(gasCost)
+	}
 	args.gasRemaining = suppliedGas
 	output, err := args.run(p, input)
 	return output, args.gasRemaining, err

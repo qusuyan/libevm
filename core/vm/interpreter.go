@@ -173,6 +173,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 	// the execution of one of the operations or until the done flag is set by the
 	// parent context.
 	for {
+		in.evm.forwardedCallGas = 0
 		if debug {
 			// Capture pre-execution values for tracing.
 			logged, pcCopy, gasCopy = false, pc, contract.Gas
@@ -214,7 +215,12 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			var dynamicCost uint64
 			dynamicCost, err = operation.dynamicGas(in.evm, contract, stack, mem, memorySize)
 			cost += dynamicCost // for tracing
-			if err != nil || !contract.UseGas(dynamicCost) {
+			if forwarded := in.evm.forwardedCallGas; forwarded > 0 {
+				if err != nil || forwarded > dynamicCost || !contract.TransferGas(dynamicCost) {
+					return nil, ErrOutOfGas
+				}
+				in.evm.consumeTopLevelGas(dynamicCost - forwarded)
+			} else if err != nil || !contract.UseGas(dynamicCost) {
 				return nil, ErrOutOfGas
 			}
 			// Do tracing before memory expansion

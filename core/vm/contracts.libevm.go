@@ -253,6 +253,9 @@ func (args *evmCallArgs) env() *environment {
 	if args.callType == DelegateCall {
 		contract = contract.AsDelegate()
 	}
+	if args.evm != nil {
+		args.evm.attachTopLevelGasTracker(contract)
+	}
 
 	return &environment{
 		evm:       args.evm,

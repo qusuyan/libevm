@@ -169,7 +169,7 @@ func makeCallVariantGasCallEIP2929(oldCalculator gasFunc) gasFunc {
 			evm.StateDB.AddAddressToAccessList(addr)
 			// Charge the remaining difference here already, to correctly calculate available
 			// gas for call
-			if !contract.UseGas(coldCost) {
+			if !contract.TransferGas(coldCost) {
 				return 0, ErrOutOfGas
 			}
 		}
@@ -182,11 +182,9 @@ func makeCallVariantGasCallEIP2929(oldCalculator gasFunc) gasFunc {
 		if warmAccess || err != nil {
 			return gas, err
 		}
-		// In case of a cold access, we temporarily add the cold charge back, and also
-		// add it to the returned gas. By adding it to the return, it will be charged
-		// outside of this function, as part of the dynamic gas, and that will make it
-		// also become correctly reported to tracers.
-		contract.Gas += coldCost
+		// In case of a cold access, temporarily return the local precharge. The
+		// dynamic gas returned below will charge the finalized parent-side cost.
+		contract.ReturnGas(coldCost)
 
 		var overflow bool
 		if gas, overflow = math.SafeAdd(gas, coldCost); overflow {

@@ -26,6 +26,9 @@ import (
 
 // canCreateContract is a convenience wrapper for calling the
 // [params.RulesHooks.CanCreateContract] hook.
+//
+// Hooks are expected to return a remaining gas value that does not exceed the
+// input gas amount.
 func (evm *EVM) canCreateContract(caller ContractRef, contractToCreate common.Address, gas uint64) (remainingGas uint64, _ error) {
 	addrs := &libevm.AddressContext{
 		Origin: evm.Origin,
@@ -63,15 +66,21 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	if err != nil {
 		return nil, gas, err
 	}
+	if endTracking := evm.beginTopLevelGasTrackingIfRoot(gas); endTracking != nil {
+		defer endTracking()
+	}
 	return evm.call(caller, addr, input, gas, value)
 }
 
 // create wraps the original geth method of the same name, now named
 // [EVM.createCommon], first spending preprocessing gas.
-func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64, value *uint256.Int, address common.Address, typ OpCode) ([]byte, common.Address, uint64, error) {
-	gas, err := evm.spendPreprocessingGas(gas)
+func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64, value *uint256.Int, address common.Address, typ OpCode) (ret []byte, addr common.Address, leftOverGas uint64, err error) {
+	gas, err = evm.spendPreprocessingGas(gas)
 	if err != nil {
 		return nil, common.Address{}, gas, err
+	}
+	if endTracking := evm.beginTopLevelGasTrackingIfRoot(gas); endTracking != nil {
+		defer endTracking()
 	}
 	return evm.createCommon(caller, codeAndHash, gas, value, address, typ)
 }
@@ -106,4 +115,30 @@ func (evm *EVM) InvalidateExecution(err error) {
 // [EVM.Reset] has been called.
 func (evm *EVM) ExecutionInvalidated() error {
 	return evm.executionInvalidated
+}
+
+func (evm *EVM) beginTopLevelGasTracking(_ uint64) {
+	evm.forwardedCallGas = 0
+}
+
+func (evm *EVM) endTopLevelGasTracking() {
+	evm.forwardedCallGas = 0
+}
+
+func (evm *EVM) resetTopLevelGasTrackingWindow() {
+	evm.forwardedCallGas = 0
+}
+
+// TopLevelGasConsumed returns the cumulative monotonic post-preprocessing gas
+// consumed across all top-level runs executed by this EVM. This includes gas
+// consumed by nested calls and persists across Reset().
+func (evm *EVM) TopLevelGasConsumed() uint64 {
+	return evm.topLevelGasConsumed.Load()
+}
+
+func (evm *EVM) consumeTopLevelGas(gas uint64) {
+	if gas == 0 {
+		return
+	}
+	evm.topLevelGasConsumed.Add(gas)
 }
