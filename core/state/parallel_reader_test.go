@@ -470,7 +470,7 @@ func TestParallelReaderCopyAllowsParallelStorageReads(t *testing.T) {
 	}
 }
 
-func TestParallelReaderStorageReadsAccumulateOnBaseStateDB(t *testing.T) {
+func TestParallelReaderStorageReadsAccumulateOnReaderUntilAccumulated(t *testing.T) {
 	previous := metrics.EnabledExpensive
 	metrics.EnabledExpensive = true
 	defer func() {
@@ -511,7 +511,11 @@ func TestParallelReaderStorageReadsAccumulateOnBaseStateDB(t *testing.T) {
 	if value == nil || *value != db.storageTrie.storage {
 		t.Fatalf("unexpected slot value: %v", value)
 	}
+	if got := base.StorageReads; got != 0 {
+		t.Fatalf("expected base StorageReads to remain unchanged before accumulate, got %s", got)
+	}
+	reader.AccumulateDurations(base)
 	if got := base.StorageReads; got <= 0 {
-		t.Fatalf("expected base StorageReads to increase, got %s", got)
+		t.Fatalf("expected base StorageReads to increase after accumulate, got %s", got)
 	}
 }

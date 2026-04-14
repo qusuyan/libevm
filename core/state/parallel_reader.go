@@ -34,6 +34,11 @@ type ParallelReader struct {
 	originalRoot common.Hash
 	hasher       crypto.KeccakState
 	storageTries map[common.Address]Trie
+
+	accountReads         time.Duration
+	storageReads         time.Duration
+	snapshotAccountReads time.Duration
+	snapshotStorageReads time.Duration
 }
 
 func NewParallelReader(base *StateDB) *ParallelReader {
@@ -78,7 +83,11 @@ func (r *ParallelReader) GetAccount(addr common.Address) (*ParallelAccountCache,
 		err    error
 	)
 	if r.snap != nil {
+		snapshotStart := time.Now()
 		data, exists, err = r.getAccountFromSnapshot(addr)
+		if metrics.EnabledExpensive {
+			r.snapshotAccountReads += time.Since(snapshotStart)
+		}
 		if err == nil && exists {
 			return r.newAccountCache(addr, data)
 		}
@@ -86,7 +95,11 @@ func (r *ParallelReader) GetAccount(addr common.Address) (*ParallelAccountCache,
 			return nil, nil
 		}
 	}
+	trieStart := time.Now()
 	data, exists, err = r.getAccountFromTrie(addr)
+	if metrics.EnabledExpensive {
+		r.accountReads += time.Since(trieStart)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -107,7 +120,7 @@ func (r *ParallelReader) GetState(addr common.Address, root common.Hash, slot co
 		start := time.Now()
 		enc, err := r.snap.Storage(crypto.HashData(r.hasher, addr.Bytes()), crypto.Keccak256Hash(slot.Bytes()))
 		if metrics.EnabledExpensive {
-			r.base.addSnapshotStorageReadDuration(time.Since(start))
+			r.snapshotStorageReads += time.Since(start)
 		}
 		if err == nil {
 			if len(enc) == 0 {
@@ -128,7 +141,7 @@ func (r *ParallelReader) GetState(addr common.Address, root common.Hash, slot co
 	}
 	val, err := tr.GetStorage(addr, slot.Bytes())
 	if metrics.EnabledExpensive {
-		r.base.addStorageReadDuration(time.Since(start))
+		r.storageReads += time.Since(start)
 	}
 	if err != nil {
 		return nil, err
@@ -136,6 +149,20 @@ func (r *ParallelReader) GetState(addr common.Address, root common.Hash, slot co
 	value := common.Hash{}
 	value.SetBytes(val)
 	return &value, nil
+}
+
+func (r *ParallelReader) AccumulateDurations(target *StateDB) {
+	if r == nil || target == nil {
+		return
+	}
+	target.addAccountReadDuration(r.accountReads)
+	target.addStorageReadDuration(r.storageReads)
+	target.addSnapshotAccountReadDuration(r.snapshotAccountReads)
+	target.addSnapshotStorageReadDuration(r.snapshotStorageReads)
+	r.accountReads = 0
+	r.storageReads = 0
+	r.snapshotAccountReads = 0
+	r.snapshotStorageReads = 0
 }
 
 func (r *ParallelReader) newAccountCache(addr common.Address, data *types.StateAccount) (*ParallelAccountCache, error) {

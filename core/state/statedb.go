@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"maps"
 	"sort"
-	"sync/atomic"
 	"time"
 
 	"github.com/ava-labs/libevm/common"
@@ -216,28 +215,28 @@ func (s *StateDB) addAccountReadDuration(d time.Duration) {
 	if s == nil || d <= 0 {
 		return
 	}
-	atomic.AddInt64((*int64)(&s.AccountReads), int64(d))
+	s.AccountReads += d
 }
 
 func (s *StateDB) addSnapshotAccountReadDuration(d time.Duration) {
 	if s == nil || d <= 0 {
 		return
 	}
-	atomic.AddInt64((*int64)(&s.SnapshotAccountReads), int64(d))
+	s.SnapshotAccountReads += d
 }
 
 func (s *StateDB) addStorageReadDuration(d time.Duration) {
 	if s == nil || d <= 0 {
 		return
 	}
-	atomic.AddInt64((*int64)(&s.StorageReads), int64(d))
+	s.StorageReads += d
 }
 
 func (s *StateDB) addSnapshotStorageReadDuration(d time.Duration) {
 	if s == nil || d <= 0 {
 		return
 	}
-	atomic.AddInt64((*int64)(&s.SnapshotStorageReads), int64(d))
+	s.SnapshotStorageReads += d
 }
 
 func (s *StateDB) AddLog(log *types.Log) {
