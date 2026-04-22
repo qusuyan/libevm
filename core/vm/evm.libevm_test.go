@@ -760,3 +760,41 @@ func TestTopLevelGasProgressForFailedNestedCall(t *testing.T) {
 
 	assertTopLevelRunDelta(t, evm, startConsumed, gasLimit, leftOverGas)
 }
+
+func TestAddTopLevelGasConsumedAdvancesCounter(t *testing.T) {
+	_, evm, _, _ := newTestEVMWithCode(t, nil, nil)
+
+	before := evm.TopLevelGasConsumed()
+	evm.AddTopLevelGasConsumed(500)
+	require.Equal(t, before+500, evm.TopLevelGasConsumed(), "AddTopLevelGasConsumed should advance the counter by delta")
+
+	evm.AddTopLevelGasConsumed(300)
+	require.Equal(t, before+800, evm.TopLevelGasConsumed(), "second call should accumulate with first")
+}
+
+func TestAddTopLevelGasConsumedZeroDeltaIsNoOp(t *testing.T) {
+	_, evm, _, _ := newTestEVMWithCode(t, nil, nil)
+
+	before := evm.TopLevelGasConsumed()
+	evm.AddTopLevelGasConsumed(0)
+	require.Equal(t, before, evm.TopLevelGasConsumed(), "zero-delta AddTopLevelGasConsumed should not change the counter")
+}
+
+func TestAddTopLevelGasConsumedAccumulatesWithExecutionGas(t *testing.T) {
+	// Verify that AddTopLevelGasConsumed advances the counter independently of
+	// a transaction execution, and that subsequent executions still accumulate
+	// on top of the manually-added delta.
+	code := []byte{0x60, 0x00, 0x50, 0x00} // PUSH 0, POP, STOP
+	_, evm, caller, contractAddr := newTestEVMWithCode(t, code, nil)
+
+	evm.AddTopLevelGasConsumed(1000)
+	afterManual := evm.TopLevelGasConsumed()
+	require.Equal(t, uint64(1000), afterManual)
+
+	const gasLimit = uint64(50_000)
+	_, leftOverGas, err := evm.Call(AccountRef(caller), contractAddr, nil, gasLimit, uint256.NewInt(0))
+	require.NoError(t, err)
+	runConsumed := gasLimit - leftOverGas
+	require.Equal(t, afterManual+runConsumed, evm.TopLevelGasConsumed(),
+		"execution gas should accumulate on top of manually-added delta")
+}

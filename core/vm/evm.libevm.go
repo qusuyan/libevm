@@ -142,3 +142,10 @@ func (evm *EVM) consumeTopLevelGas(gas uint64) {
 	}
 	evm.topLevelGasConsumed.Add(gas)
 }
+
+// AddTopLevelGasConsumed increments the cumulative top-level gas consumed by
+// delta. This is used by the parallel executor to charge scheduler-accounting
+// gas during validation and commit phases without rebinding EVM state.
+func (evm *EVM) AddTopLevelGasConsumed(delta uint64) {
+	evm.consumeTopLevelGas(delta)
+}

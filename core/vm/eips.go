@@ -113,15 +113,26 @@ func opChainID(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 func enable2200(jt *JumpTable) {
 	jt[SLOAD].constantGas = params.SloadGasEIP2200
 	jt[SSTORE].dynamicGas = gasSStoreEIP2200
+	// Scheduler accounting: SSTORE set-new-slot cost is the representative
+	// upper bound for commit-time storage writes.
+	jt[SSTORE].schedulerAccountingGas = params.SstoreSetGasEIP2200
 }
 
 // enable2929 enables "EIP-2929: Gas cost increases for state access opcodes"
 // https://eips.ethereum.org/EIPS/eip-2929
 func enable2929(jt *JumpTable) {
 	jt[SSTORE].dynamicGas = gasSStoreEIP2929
+	// Scheduler accounting: SSTORE set-new-slot cost reinstalled alongside the
+	// new dynamic gas function. Same value as EIP-2200 since we use a fixed
+	// representative cost for commit-time writes regardless of warm/cold status.
+	jt[SSTORE].schedulerAccountingGas = params.SstoreSetGasEIP2200
 
 	jt[SLOAD].constantGas = 0
 	jt[SLOAD].dynamicGas = gasSLoadEIP2929
+	// Scheduler accounting: validation re-reads a slot that was already
+	// accessed during execution, so it is a warm read. Use the warm storage
+	// read cost as the state-independent accounting substitute.
+	jt[SLOAD].schedulerAccountingGas = params.WarmStorageReadCostEIP2929
 
 	jt[EXTCODECOPY].constantGas = params.WarmStorageReadCostEIP2929
 	jt[EXTCODECOPY].dynamicGas = gasExtCodeCopyEIP2929
@@ -148,7 +159,8 @@ func enable2929(jt *JumpTable) {
 	jt[DELEGATECALL].dynamicGas = gasDelegateCallEIP2929
 
 	// This was previously part of the dynamic cost, but we're using it as a constantGas
-	// factor here
+	// factor here. Scheduler accounting: the base selfdestruct cost is already
+	// captured in constantGas, so schedulerAccountingGas stays 0.
 	jt[SELFDESTRUCT].constantGas = params.SelfdestructGasEIP150
 	jt[SELFDESTRUCT].dynamicGas = gasSelfdestructEIP2929
 }
@@ -159,6 +171,8 @@ func enable2929(jt *JumpTable) {
 // - Reduces max refunds to 20% gas
 func enable3529(jt *JumpTable) {
 	jt[SSTORE].dynamicGas = gasSStoreEIP3529
+	// Scheduler accounting stays the same across refund-policy changes.
+	jt[SSTORE].schedulerAccountingGas = params.SstoreSetGasEIP2200
 	jt[SELFDESTRUCT].dynamicGas = gasSelfdestructEIP3529
 }
 

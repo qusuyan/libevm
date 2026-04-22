@@ -34,6 +34,12 @@ type operation struct {
 	execute     executionFunc
 	constantGas uint64
 	dynamicGas  gasFunc
+	// schedulerAccountingGas is the state-independent substitute for this
+	// opcode's dynamic gas portion, used by parallel-execution schedulers to
+	// approximate worker progress during validation and commit. The total
+	// scheduler-accounting cost for an opcode is:
+	//   constantGas + schedulerAccountingGas
+	schedulerAccountingGas uint64
 	// minStack tells how many stack items are required
 	minStack int
 	// maxStack specifies the max length the stack can have for this operation
@@ -555,10 +561,11 @@ func newFrontierInstructionSet() JumpTable {
 			maxStack:    maxStack(1, 1),
 		},
 		SSTORE: {
-			execute:    opSstore,
-			dynamicGas: gasSStore,
-			minStack:   minStack(2, 0),
-			maxStack:   maxStack(2, 0),
+			execute:                opSstore,
+			dynamicGas:             gasSStore,
+			schedulerAccountingGas: params.SstoreSetGas,
+			minStack:               minStack(2, 0),
+			maxStack:               maxStack(2, 0),
 		},
 		JUMP: {
 			execute:     opJump,
@@ -981,39 +988,44 @@ func newFrontierInstructionSet() JumpTable {
 			maxStack:    maxSwapStack(17),
 		},
 		LOG0: {
-			execute:    makeLog(0),
-			dynamicGas: makeGasLog(0),
-			minStack:   minStack(2, 0),
-			maxStack:   maxStack(2, 0),
-			memorySize: memoryLog,
+			execute:                makeLog(0),
+			dynamicGas:             makeGasLog(0),
+			schedulerAccountingGas: params.LogGas,
+			minStack:               minStack(2, 0),
+			maxStack:               maxStack(2, 0),
+			memorySize:             memoryLog,
 		},
 		LOG1: {
-			execute:    makeLog(1),
-			dynamicGas: makeGasLog(1),
-			minStack:   minStack(3, 0),
-			maxStack:   maxStack(3, 0),
-			memorySize: memoryLog,
+			execute:                makeLog(1),
+			dynamicGas:             makeGasLog(1),
+			schedulerAccountingGas: params.LogGas + params.LogTopicGas,
+			minStack:               minStack(3, 0),
+			maxStack:               maxStack(3, 0),
+			memorySize:             memoryLog,
 		},
 		LOG2: {
-			execute:    makeLog(2),
-			dynamicGas: makeGasLog(2),
-			minStack:   minStack(4, 0),
-			maxStack:   maxStack(4, 0),
-			memorySize: memoryLog,
+			execute:                makeLog(2),
+			dynamicGas:             makeGasLog(2),
+			schedulerAccountingGas: params.LogGas + 2*params.LogTopicGas,
+			minStack:               minStack(4, 0),
+			maxStack:               maxStack(4, 0),
+			memorySize:             memoryLog,
 		},
 		LOG3: {
-			execute:    makeLog(3),
-			dynamicGas: makeGasLog(3),
-			minStack:   minStack(5, 0),
-			maxStack:   maxStack(5, 0),
-			memorySize: memoryLog,
+			execute:                makeLog(3),
+			dynamicGas:             makeGasLog(3),
+			schedulerAccountingGas: params.LogGas + 3*params.LogTopicGas,
+			minStack:               minStack(5, 0),
+			maxStack:               maxStack(5, 0),
+			memorySize:             memoryLog,
 		},
 		LOG4: {
-			execute:    makeLog(4),
-			dynamicGas: makeGasLog(4),
-			minStack:   minStack(6, 0),
-			maxStack:   maxStack(6, 0),
-			memorySize: memoryLog,
+			execute:                makeLog(4),
+			dynamicGas:             makeGasLog(4),
+			schedulerAccountingGas: params.LogGas + 4*params.LogTopicGas,
+			minStack:               minStack(6, 0),
+			maxStack:               maxStack(6, 0),
+			memorySize:             memoryLog,
 		},
 		CREATE: {
 			execute:     opCreate,
