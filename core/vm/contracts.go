@@ -179,13 +179,13 @@ func (args *evmCallArgs) RunPrecompiledContract(p PrecompiledContract, input []b
 	gasCost := p.RequiredGas(input)
 	if suppliedGas < gasCost {
 		if args.evm != nil {
-			args.evm.consumeTopLevelGas(suppliedGas)
+			args.evm.ConsumeTopLevelGas(suppliedGas)
 		}
 		return nil, 0, ErrOutOfGas
 	}
 	suppliedGas -= gasCost
 	if args.evm != nil {
-		args.evm.consumeTopLevelGas(gasCost)
+		args.evm.ConsumeTopLevelGas(gasCost)
 	}
 	args.gasRemaining = suppliedGas
 	output, err := args.run(p, input)

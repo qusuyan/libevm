@@ -219,7 +219,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 				if err != nil || forwarded > dynamicCost || !contract.TransferGas(dynamicCost) {
 					return nil, ErrOutOfGas
 				}
-				in.evm.consumeTopLevelGas(dynamicCost - forwarded)
+				in.evm.ConsumeTopLevelGas(dynamicCost - forwarded)
 			} else if err != nil || !contract.UseGas(dynamicCost) {
 				return nil, ErrOutOfGas
 			}
