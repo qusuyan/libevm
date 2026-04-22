@@ -136,7 +136,7 @@ func (evm *EVM) TopLevelGasConsumed() uint64 {
 	return evm.topLevelGasConsumed.Load()
 }
 
-func (evm *EVM) consumeTopLevelGas(gas uint64) {
+func (evm *EVM) ConsumeTopLevelGas(gas uint64) {
 	if gas == 0 {
 		return
 	}

@@ -282,7 +282,7 @@ func (evm *EVM) call(caller ContractRef, addr common.Address, input []byte, gas 
 	if err != nil {
 		evm.StateDB.RevertToSnapshot(snapshot)
 		if err != ErrExecutionReverted {
-			evm.consumeTopLevelGas(gas)
+			evm.ConsumeTopLevelGas(gas)
 			gas = 0
 		}
 		// TODO: consider clearing up unused snapshots:
@@ -341,7 +341,7 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 	if err != nil {
 		evm.StateDB.RevertToSnapshot(snapshot)
 		if err != ErrExecutionReverted {
-			evm.consumeTopLevelGas(gas)
+			evm.ConsumeTopLevelGas(gas)
 			gas = 0
 		}
 	}
@@ -391,7 +391,7 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 	if err != nil {
 		evm.StateDB.RevertToSnapshot(snapshot)
 		if err != ErrExecutionReverted {
-			evm.consumeTopLevelGas(gas)
+			evm.ConsumeTopLevelGas(gas)
 			gas = 0
 		}
 	}
@@ -453,7 +453,7 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 	if err != nil {
 		evm.StateDB.RevertToSnapshot(snapshot)
 		if err != ErrExecutionReverted {
-			evm.consumeTopLevelGas(gas)
+			evm.ConsumeTopLevelGas(gas)
 			gas = 0
 		}
 	}
@@ -495,7 +495,7 @@ func (evm *EVM) createCommon(caller ContractRef, codeAndHash *codeAndHash, gas u
 	// Ensure there's no existing contract already at the designated address
 	contractHash := evm.StateDB.GetCodeHash(address)
 	if evm.StateDB.GetNonce(address) != 0 || (contractHash != (common.Hash{}) && contractHash != types.EmptyCodeHash) {
-		evm.consumeTopLevelGas(gas)
+		evm.ConsumeTopLevelGas(gas)
 		return nil, common.Address{}, 0, ErrContractAddressCollision
 	}
 
@@ -507,7 +507,7 @@ func (evm *EVM) createCommon(caller ContractRef, codeAndHash *codeAndHash, gas u
 	originalGas := gas
 	gas, err := evm.canCreateContract(caller, address, gas)
 	if gas < originalGas {
-		evm.consumeTopLevelGas(originalGas - gas)
+		evm.ConsumeTopLevelGas(originalGas - gas)
 	}
 	if err != nil {
 		return nil, common.Address{}, gas, err
