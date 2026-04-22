@@ -156,9 +156,9 @@ func TestOverrideEVMResetArgs(t *testing.T) {
 }
 
 type topLevelGasTracer struct {
-	evm       *EVM
-	consumed  []uint64
-	depths    []int
+	evm      *EVM
+	consumed []uint64
+	depths   []int
 }
 
 func (t *topLevelGasTracer) CaptureTxStart(uint64) {}
@@ -765,10 +765,10 @@ func TestAddTopLevelGasConsumedAdvancesCounter(t *testing.T) {
 	_, evm, _, _ := newTestEVMWithCode(t, nil, nil)
 
 	before := evm.TopLevelGasConsumed()
-	evm.AddTopLevelGasConsumed(500)
-	require.Equal(t, before+500, evm.TopLevelGasConsumed(), "AddTopLevelGasConsumed should advance the counter by delta")
+	evm.ConsumeTopLevelGas(500)
+	require.Equal(t, before+500, evm.TopLevelGasConsumed(), "ConsumeTopLevelGas should advance the counter by delta")
 
-	evm.AddTopLevelGasConsumed(300)
+	evm.ConsumeTopLevelGas(300)
 	require.Equal(t, before+800, evm.TopLevelGasConsumed(), "second call should accumulate with first")
 }
 
@@ -776,8 +776,8 @@ func TestAddTopLevelGasConsumedZeroDeltaIsNoOp(t *testing.T) {
 	_, evm, _, _ := newTestEVMWithCode(t, nil, nil)
 
 	before := evm.TopLevelGasConsumed()
-	evm.AddTopLevelGasConsumed(0)
-	require.Equal(t, before, evm.TopLevelGasConsumed(), "zero-delta AddTopLevelGasConsumed should not change the counter")
+	evm.ConsumeTopLevelGas(0)
+	require.Equal(t, before, evm.TopLevelGasConsumed(), "zero-delta ConsumeTopLevelGas should not change the counter")
 }
 
 func TestAddTopLevelGasConsumedAccumulatesWithExecutionGas(t *testing.T) {
@@ -787,7 +787,7 @@ func TestAddTopLevelGasConsumedAccumulatesWithExecutionGas(t *testing.T) {
 	code := []byte{0x60, 0x00, 0x50, 0x00} // PUSH 0, POP, STOP
 	_, evm, caller, contractAddr := newTestEVMWithCode(t, code, nil)
 
-	evm.AddTopLevelGasConsumed(1000)
+	evm.ConsumeTopLevelGas(1000)
 	afterManual := evm.TopLevelGasConsumed()
 	require.Equal(t, uint64(1000), afterManual)
 
