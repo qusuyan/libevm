@@ -40,6 +40,14 @@ type operation struct {
 	// scheduler-accounting cost for an opcode is:
 	//   constantGas + schedulerAccountingGas
 	schedulerAccountingGas uint64
+	// executionWriteOp marks state-write opcodes (SSTORE, CREATE, CREATE2,
+	// SELFDESTRUCT) whose dynamic gas includes later trie/root work that is
+	// not part of block execution. When true, the interpreter charges only
+	// schedulerAccountingGas (not the full dynamic cost) to topLevelGasConsumed,
+	// keeping the execution-phase scheduler clock free of deferred commit costs.
+	// Consensus gas accounting (contract.Gas, receipts, block admission) is
+	// unchanged.
+	executionWriteOp bool
 	// minStack tells how many stack items are required
 	minStack int
 	// maxStack specifies the max length the stack can have for this operation
@@ -173,12 +181,13 @@ func newConstantinopleInstructionSet() JumpTable {
 		maxStack:    maxStack(1, 1),
 	}
 	instructionSet[CREATE2] = &operation{
-		execute:     opCreate2,
-		constantGas: params.Create2Gas,
-		dynamicGas:  gasCreate2,
-		minStack:    minStack(4, 1),
-		maxStack:    maxStack(4, 1),
-		memorySize:  memoryCreate2,
+		execute:          opCreate2,
+		constantGas:      params.Create2Gas,
+		dynamicGas:       gasCreate2,
+		executionWriteOp: true,
+		minStack:         minStack(4, 1),
+		maxStack:         maxStack(4, 1),
+		memorySize:       memoryCreate2,
 	}
 	return validate(instructionSet)
 }
@@ -564,6 +573,7 @@ func newFrontierInstructionSet() JumpTable {
 			execute:                opSstore,
 			dynamicGas:             gasSStore,
 			schedulerAccountingGas: params.SstoreSetGas,
+			executionWriteOp:       true,
 			minStack:               minStack(2, 0),
 			maxStack:               maxStack(2, 0),
 		},
@@ -1028,12 +1038,13 @@ func newFrontierInstructionSet() JumpTable {
 			memorySize:             memoryLog,
 		},
 		CREATE: {
-			execute:     opCreate,
-			constantGas: params.CreateGas,
-			dynamicGas:  gasCreate,
-			minStack:    minStack(3, 1),
-			maxStack:    maxStack(3, 1),
-			memorySize:  memoryCreate,
+			execute:          opCreate,
+			constantGas:      params.CreateGas,
+			dynamicGas:       gasCreate,
+			executionWriteOp: true,
+			minStack:         minStack(3, 1),
+			maxStack:         maxStack(3, 1),
+			memorySize:       memoryCreate,
 		},
 		CALL: {
 			execute:     opCall,
@@ -1059,10 +1070,11 @@ func newFrontierInstructionSet() JumpTable {
 			memorySize: memoryReturn,
 		},
 		SELFDESTRUCT: {
-			execute:    opSelfdestruct,
-			dynamicGas: gasSelfdestruct,
-			minStack:   minStack(1, 0),
-			maxStack:   maxStack(1, 0),
+			execute:          opSelfdestruct,
+			dynamicGas:       gasSelfdestruct,
+			executionWriteOp: true,
+			minStack:         minStack(1, 0),
+			maxStack:         maxStack(1, 0),
 		},
 	}
 

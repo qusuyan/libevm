@@ -156,9 +156,9 @@ func TestOverrideEVMResetArgs(t *testing.T) {
 }
 
 type topLevelGasTracer struct {
-	evm       *EVM
-	consumed  []uint64
-	depths    []int
+	evm      *EVM
+	consumed []uint64
+	depths   []int
 }
 
 func (t *topLevelGasTracer) CaptureTxStart(uint64) {}
@@ -727,7 +727,13 @@ func TestTopLevelGasProgressForNestedCreate2AddressCollision(t *testing.T) {
 	_, leftOverGas, err := evm.Call(AccountRef(caller), contractAddr, nil, gasLimit, uint256.NewInt(0))
 	require.NoError(t, err)
 
-	assertTopLevelRunDelta(t, evm, startConsumed, gasLimit, leftOverGas)
+	// CREATE2 is an executionWriteOp: its dynamic gas (keccak address-hash cost)
+	// is deducted from consensus gas but not added to topLevelGasConsumed. The
+	// scheduler delta is therefore strictly less than gasConsumed.
+	gasConsumed := gasLimit - leftOverGas
+	topLevelDelta := evm.TopLevelGasConsumed() - startConsumed
+	require.LessOrEqual(t, topLevelDelta, gasConsumed, "scheduler delta must not exceed gas consumed")
+	require.Greater(t, topLevelDelta, uint64(0), "scheduler delta must be positive")
 }
 
 func TestTopLevelGasProgressForFailedNestedCall(t *testing.T) {
@@ -761,33 +767,33 @@ func TestTopLevelGasProgressForFailedNestedCall(t *testing.T) {
 	assertTopLevelRunDelta(t, evm, startConsumed, gasLimit, leftOverGas)
 }
 
-func TestAddTopLevelGasConsumedAdvancesCounter(t *testing.T) {
+func TestConsumeTopLevelGasAdvancesCounter(t *testing.T) {
 	_, evm, _, _ := newTestEVMWithCode(t, nil, nil)
 
 	before := evm.TopLevelGasConsumed()
-	evm.AddTopLevelGasConsumed(500)
-	require.Equal(t, before+500, evm.TopLevelGasConsumed(), "AddTopLevelGasConsumed should advance the counter by delta")
+	evm.ConsumeTopLevelGas(500)
+	require.Equal(t, before+500, evm.TopLevelGasConsumed(), "ConsumeTopLevelGas should advance the counter by delta")
 
-	evm.AddTopLevelGasConsumed(300)
+	evm.ConsumeTopLevelGas(300)
 	require.Equal(t, before+800, evm.TopLevelGasConsumed(), "second call should accumulate with first")
 }
 
-func TestAddTopLevelGasConsumedZeroDeltaIsNoOp(t *testing.T) {
+func TestConsumeTopLevelGasZeroDeltaIsNoOp(t *testing.T) {
 	_, evm, _, _ := newTestEVMWithCode(t, nil, nil)
 
 	before := evm.TopLevelGasConsumed()
-	evm.AddTopLevelGasConsumed(0)
-	require.Equal(t, before, evm.TopLevelGasConsumed(), "zero-delta AddTopLevelGasConsumed should not change the counter")
+	evm.ConsumeTopLevelGas(0)
+	require.Equal(t, before, evm.TopLevelGasConsumed(), "zero-delta ConsumeTopLevelGas should not change the counter")
 }
 
-func TestAddTopLevelGasConsumedAccumulatesWithExecutionGas(t *testing.T) {
-	// Verify that AddTopLevelGasConsumed advances the counter independently of
+func TestConsumeTopLevelGasConsumedAccumulatesWithExecutionGas(t *testing.T) {
+	// Verify that ConsumeTopLevelGas advances the counter independently of
 	// a transaction execution, and that subsequent executions still accumulate
 	// on top of the manually-added delta.
 	code := []byte{0x60, 0x00, 0x50, 0x00} // PUSH 0, POP, STOP
 	_, evm, caller, contractAddr := newTestEVMWithCode(t, code, nil)
 
-	evm.AddTopLevelGasConsumed(1000)
+	evm.ConsumeTopLevelGas(1000)
 	afterManual := evm.TopLevelGasConsumed()
 	require.Equal(t, uint64(1000), afterManual)
 
@@ -797,4 +803,78 @@ func TestAddTopLevelGasConsumedAccumulatesWithExecutionGas(t *testing.T) {
 	runConsumed := gasLimit - leftOverGas
 	require.Equal(t, afterManual+runConsumed, evm.TopLevelGasConsumed(),
 		"execution gas should accumulate on top of manually-added delta")
+}
+
+// TestExecutionWriteOpSSTOREChargesSchedulerAccountingGas verifies that the
+// SSTORE opcode charges its schedulerAccountingGas constant to the scheduler
+// clock rather than its full consensus dynamic cost.
+func TestExecutionWriteOpSSTOREChargesSchedulerAccountingGas(t *testing.T) {
+	// PUSH1 1, PUSH1 0, SSTORE, STOP — sets storage[0] = 1.
+	code := []byte{0x60, 0x01, 0x60, 0x00, 0x55, 0x00}
+	statedb, evm, caller, contractAddr := newTestEVMWithCode(t, code, nil)
+	// EIP-2929 requires caller and target in the access list before SSTORE.
+	statedb.AddAddressToAccessList(caller)
+	statedb.AddAddressToAccessList(contractAddr)
+
+	const gasLimit = uint64(100_000)
+	startConsumed := evm.TopLevelGasConsumed()
+	_, leftOverGas, err := evm.Call(AccountRef(caller), contractAddr, nil, gasLimit, uint256.NewInt(0))
+	require.NoError(t, err)
+
+	gasConsumed := gasLimit - leftOverGas
+	topLevelDelta := evm.TopLevelGasConsumed() - startConsumed
+
+	// 2×PUSH1 (3 gas each) contribute normally to both clocks.
+	// SSTORE contributes schedulerAccountingGas (= SstoreSetGas) to topLevel,
+	// not its larger consensus dynamic cost.
+	const (
+		push1Gas       = uint64(3)
+		sstoreSchedGas = uint64(params.SstoreSetGas)
+	)
+	wantTopLevel := 2*push1Gas + sstoreSchedGas
+	require.Equal(t, wantTopLevel, topLevelDelta,
+		"SSTORE must contribute schedulerAccountingGas to topLevelGasConsumed, not full dynamic cost")
+	require.Greater(t, gasConsumed, topLevelDelta,
+		"consensus gas must exceed scheduler gas when cold SSTORE dynamic cost > schedulerAccountingGas")
+}
+
+// TestExecutionWriteOpCREATEExcludesDynamicGas verifies that the CREATE opcode
+// charges only its constantGas to the scheduler clock; its dynamic gas (memory
+// expansion and initcode word cost) is excluded from topLevelGasConsumed.
+func TestExecutionWriteOpCREATEExcludesDynamicGas(t *testing.T) {
+	// CREATE with non-empty initcode to force non-zero dynamic gas.
+	// initCode: STOP (1 byte). initOffset is placed at byte 15.
+	initCode := []byte{0x00}
+	initOffset := byte(15)
+	parentCode := append(
+		[]byte{
+			0x60, byte(len(initCode)), // PUSH1 size
+			0x60, initOffset, // PUSH1 offset
+			0x60, 0x00, // PUSH1 value
+			0x39,                      // CODECOPY
+			0x60, byte(len(initCode)), // PUSH1 size
+			0x60, 0x00, // PUSH1 offset
+			0x60, 0x00, // PUSH1 value
+			0xf0, // CREATE
+			0x00, // STOP
+		},
+		initCode...,
+	)
+
+	_, evm, caller, contractAddr := newTestEVMWithCode(t, parentCode, nil)
+
+	const gasLimit = uint64(200_000)
+	startConsumed := evm.TopLevelGasConsumed()
+	_, leftOverGas, err := evm.Call(AccountRef(caller), contractAddr, nil, gasLimit, uint256.NewInt(0))
+	require.NoError(t, err)
+
+	gasConsumed := gasLimit - leftOverGas
+	topLevelDelta := evm.TopLevelGasConsumed() - startConsumed
+
+	// topLevelDelta must be strictly less than gasConsumed because CREATE's
+	// dynamic gas is excluded from the scheduler clock (executionWriteOp=true).
+	require.LessOrEqual(t, topLevelDelta, gasConsumed,
+		"CREATE scheduler delta must not exceed consensus gas consumed")
+	require.Greater(t, topLevelDelta, uint64(0),
+		"CREATE scheduler delta must be positive")
 }

@@ -326,10 +326,11 @@ func enable7516(jt *JumpTable) {
 // enable6780 applies EIP-6780 (deactivate SELFDESTRUCT)
 func enable6780(jt *JumpTable) {
 	jt[SELFDESTRUCT] = &operation{
-		execute:     opSelfdestruct6780,
-		dynamicGas:  gasSelfdestructEIP3529,
-		constantGas: params.SelfdestructGasEIP150,
-		minStack:    minStack(1, 0),
-		maxStack:    maxStack(1, 0),
+		execute:          opSelfdestruct6780,
+		dynamicGas:       gasSelfdestructEIP3529,
+		constantGas:      params.SelfdestructGasEIP150,
+		executionWriteOp: true,
+		minStack:         minStack(1, 0),
+		maxStack:         maxStack(1, 0),
 	}
 }
