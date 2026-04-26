@@ -181,13 +181,14 @@ func newConstantinopleInstructionSet() JumpTable {
 		maxStack:    maxStack(1, 1),
 	}
 	instructionSet[CREATE2] = &operation{
-		execute:          opCreate2,
-		constantGas:      params.Create2Gas,
-		dynamicGas:       gasCreate2,
-		executionWriteOp: true,
-		minStack:         minStack(4, 1),
-		maxStack:         maxStack(4, 1),
-		memorySize:       memoryCreate2,
+		execute:                opCreate2,
+		constantGas:            params.Create2Gas,
+		schedulerAccountingGas: params.SloadGasFrontier,
+		dynamicGas:             gasCreate2,
+		executionWriteOp:       true,
+		minStack:               minStack(4, 1),
+		maxStack:               maxStack(4, 1),
+		memorySize:             memoryCreate2,
 	}
 	return validate(instructionSet)
 }
@@ -572,7 +573,7 @@ func newFrontierInstructionSet() JumpTable {
 		SSTORE: {
 			execute:                opSstore,
 			dynamicGas:             gasSStore,
-			schedulerAccountingGas: params.SstoreSetGas,
+			schedulerAccountingGas: params.SloadGasFrontier,
 			executionWriteOp:       true,
 			minStack:               minStack(2, 0),
 			maxStack:               maxStack(2, 0),
@@ -1038,13 +1039,14 @@ func newFrontierInstructionSet() JumpTable {
 			memorySize:             memoryLog,
 		},
 		CREATE: {
-			execute:          opCreate,
-			constantGas:      params.CreateGas,
-			dynamicGas:       gasCreate,
-			executionWriteOp: true,
-			minStack:         minStack(3, 1),
-			maxStack:         maxStack(3, 1),
-			memorySize:       memoryCreate,
+			execute:                opCreate,
+			constantGas:            params.CreateGas,
+			dynamicGas:             gasCreate,
+			schedulerAccountingGas: params.SloadGasFrontier,
+			executionWriteOp:       true,
+			minStack:               minStack(3, 1),
+			maxStack:               maxStack(3, 1),
+			memorySize:             memoryCreate,
 		},
 		CALL: {
 			execute:     opCall,
@@ -1070,11 +1072,12 @@ func newFrontierInstructionSet() JumpTable {
 			memorySize: memoryReturn,
 		},
 		SELFDESTRUCT: {
-			execute:          opSelfdestruct,
-			dynamicGas:       gasSelfdestruct,
-			executionWriteOp: true,
-			minStack:         minStack(1, 0),
-			maxStack:         maxStack(1, 0),
+			execute:                opSelfdestruct,
+			dynamicGas:             gasSelfdestruct,
+			schedulerAccountingGas: params.SloadGasFrontier,
+			executionWriteOp:       true,
+			minStack:               minStack(1, 0),
+			maxStack:               maxStack(1, 0),
 		},
 	}
 

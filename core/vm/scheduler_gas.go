@@ -34,7 +34,10 @@ func LookupSchedulerAccountingCost(rules params.Rules, op OpCode) (uint64, error
 	if entry == nil {
 		return 0, fmt.Errorf("opcode %v not present in instruction set for given rules", op)
 	}
-	return entry.constantGas + entry.schedulerAccountingGas, nil
+	if entry.schedulerAccountingGas == 0 {
+		return entry.constantGas, nil
+	}
+	return entry.schedulerAccountingGas, nil
 }
 
 // SchedulerKeccak256MemoryCost returns the KECCAK256 memory-expansion cost for

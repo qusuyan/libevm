@@ -75,6 +75,13 @@ func enable1884(jt *JumpTable) {
 	jt[BALANCE].constantGas = params.BalanceGasEIP1884
 	jt[EXTCODEHASH].constantGas = params.ExtcodeHashGasEIP1884
 
+	jt[SSTORE].schedulerAccountingGas = params.SloadGasEIP1884
+	jt[CREATE].schedulerAccountingGas = params.SloadGasEIP1884
+	jt[SELFDESTRUCT].schedulerAccountingGas = params.SloadGasEIP1884
+	if jt[CREATE2] != nil {
+		jt[CREATE2].schedulerAccountingGas = params.SloadGasEIP1884
+	}
+
 	// New opcode
 	jt[SELFBALANCE] = &operation{
 		execute:     opSelfBalance,
@@ -115,17 +122,18 @@ func enable2200(jt *JumpTable) {
 	jt[SSTORE].dynamicGas = gasSStoreEIP2200
 	// Scheduler accounting: SSTORE set-new-slot cost is the representative
 	// upper bound for commit-time storage writes.
-	jt[SSTORE].schedulerAccountingGas = params.SstoreSetGasEIP2200
+	jt[SSTORE].schedulerAccountingGas = params.SloadGasEIP2200
+	jt[CREATE].schedulerAccountingGas = params.SloadGasEIP2200
+	jt[SELFDESTRUCT].schedulerAccountingGas = params.SloadGasEIP2200
+	if jt[CREATE2] != nil {
+		jt[CREATE2].schedulerAccountingGas = params.SloadGasEIP2200
+	}
 }
 
 // enable2929 enables "EIP-2929: Gas cost increases for state access opcodes"
 // https://eips.ethereum.org/EIPS/eip-2929
 func enable2929(jt *JumpTable) {
 	jt[SSTORE].dynamicGas = gasSStoreEIP2929
-	// Scheduler accounting: SSTORE set-new-slot cost reinstalled alongside the
-	// new dynamic gas function. Same value as EIP-2200 since we use a fixed
-	// representative cost for commit-time writes regardless of warm/cold status.
-	jt[SSTORE].schedulerAccountingGas = params.SstoreSetGasEIP2200
 
 	jt[SLOAD].constantGas = 0
 	jt[SLOAD].dynamicGas = gasSLoadEIP2929
@@ -133,6 +141,15 @@ func enable2929(jt *JumpTable) {
 	// accessed during execution, so it is a warm read. Use the warm storage
 	// read cost as the state-independent accounting substitute.
 	jt[SLOAD].schedulerAccountingGas = params.WarmStorageReadCostEIP2929
+	// Scheduler accounting: SSTORE set-new-slot cost reinstalled alongside the
+	// new dynamic gas function. Same value as EIP-2200 since we use a fixed
+	// representative cost for commit-time writes regardless of warm/cold status.
+	jt[SSTORE].schedulerAccountingGas = params.WarmStorageReadCostEIP2929
+	jt[CREATE].schedulerAccountingGas = params.WarmStorageReadCostEIP2929
+	jt[SELFDESTRUCT].schedulerAccountingGas = params.WarmStorageReadCostEIP2929
+	if jt[CREATE2] != nil {
+		jt[CREATE2].schedulerAccountingGas = params.WarmStorageReadCostEIP2929
+	}
 
 	jt[EXTCODECOPY].constantGas = params.WarmStorageReadCostEIP2929
 	jt[EXTCODECOPY].dynamicGas = gasExtCodeCopyEIP2929
@@ -172,7 +189,7 @@ func enable2929(jt *JumpTable) {
 func enable3529(jt *JumpTable) {
 	jt[SSTORE].dynamicGas = gasSStoreEIP3529
 	// Scheduler accounting stays the same across refund-policy changes.
-	jt[SSTORE].schedulerAccountingGas = params.SstoreSetGasEIP2200
+	// jt[SSTORE].schedulerAccountingGas = params.SstoreSetGasEIP2200
 	jt[SELFDESTRUCT].dynamicGas = gasSelfdestructEIP3529
 }
 
@@ -326,11 +343,12 @@ func enable7516(jt *JumpTable) {
 // enable6780 applies EIP-6780 (deactivate SELFDESTRUCT)
 func enable6780(jt *JumpTable) {
 	jt[SELFDESTRUCT] = &operation{
-		execute:          opSelfdestruct6780,
-		dynamicGas:       gasSelfdestructEIP3529,
-		constantGas:      params.SelfdestructGasEIP150,
-		executionWriteOp: true,
-		minStack:         minStack(1, 0),
-		maxStack:         maxStack(1, 0),
+		execute:                opSelfdestruct6780,
+		dynamicGas:             gasSelfdestructEIP3529,
+		constantGas:            params.SelfdestructGasEIP150,
+		schedulerAccountingGas: params.SloadGasFrontier,
+		executionWriteOp:       true,
+		minStack:               minStack(1, 0),
+		maxStack:               maxStack(1, 0),
 	}
 }
