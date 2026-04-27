@@ -49,11 +49,11 @@ func TestLookupSchedulerAccountingCostLOG(t *testing.T) {
 	berlinRules := params.Rules{IsEIP150: true, IsEIP158: true, IsHomestead: true, IsByzantium: true, IsConstantinople: true, IsIstanbul: true, IsBerlin: true}
 
 	expectedLogCosts := [5]uint64{
-		params.LogGas,                             // LOG0: 375
-		params.LogGas + params.LogTopicGas,        // LOG1: 750
-		params.LogGas + 2*params.LogTopicGas,      // LOG2: 1125
-		params.LogGas + 3*params.LogTopicGas,      // LOG3: 1500
-		params.LogGas + 4*params.LogTopicGas,      // LOG4: 1875
+		params.LogGas,                        // LOG0: 375
+		params.LogGas + params.LogTopicGas,   // LOG1: 750
+		params.LogGas + 2*params.LogTopicGas, // LOG2: 1125
+		params.LogGas + 3*params.LogTopicGas, // LOG3: 1500
+		params.LogGas + 4*params.LogTopicGas, // LOG4: 1875
 	}
 	for n := 0; n <= 4; n++ {
 		op := OpCode(int(LOG0) + n)
@@ -98,11 +98,12 @@ func TestSchedulerKeccak256MemoryCost(t *testing.T) {
 	}{
 		{0, 0},
 		{-1, 0},
-		{1, params.Keccak256WordGas},     // 1 byte = 1 word
-		{32, params.Keccak256WordGas},    // exactly 1 word
-		{33, 2 * params.Keccak256WordGas}, // 33 bytes = 2 words (ceil)
-		{64, 2 * params.Keccak256WordGas},
-		{65, 3 * params.Keccak256WordGas},
+		{1, params.MemoryGas},      // 1 byte = 1 word
+		{32, params.MemoryGas},     // exactly 1 word
+		{33, 2 * params.MemoryGas}, // 33 bytes = 2 words (ceil)
+		{64, 2 * params.MemoryGas},
+		{65, 3 * params.MemoryGas},
+		{1024, 32*params.MemoryGas + 32*32/params.QuadCoeffDiv},
 	}
 	for _, tt := range tests {
 		got := SchedulerKeccak256MemoryCost(tt.byteLen)

@@ -40,9 +40,10 @@ func LookupSchedulerAccountingCost(rules params.Rules, op OpCode) (uint64, error
 	return entry.schedulerAccountingGas, nil
 }
 
-// SchedulerKeccak256MemoryCost returns the KECCAK256 memory-expansion cost for
-// a payload of byteLen bytes. This is the "memory cost only" portion of the
-// KECCAK256 gas formula; the per-word hashing charge is intentionally excluded.
+// SchedulerKeccak256MemoryCost returns the KECCAK256 memory-expansion cost from
+// empty memory for a payload of byteLen bytes. This is the memory-cost-only
+// portion of the KECCAK256 gas formula; the constant and per-word hashing
+// charges are intentionally excluded.
 //
 // Used by parallel executors to charge scheduler-accounting gas for preimage
 // insertions during commit, where the exact hashing work is already done but we
@@ -52,7 +53,7 @@ func SchedulerKeccak256MemoryCost(byteLen int) uint64 {
 		return 0
 	}
 	words := uint64((byteLen + 31) / 32)
-	return words * params.Keccak256WordGas
+	return words*params.MemoryGas + words*words/params.QuadCoeffDiv
 }
 
 // instructionSetForRules returns a pointer to the package-level JumpTable that
