@@ -698,7 +698,17 @@ func TestTopLevelGasProgressForNestedCreateAddressCollision(t *testing.T) {
 	assertTopLevelRunDelta(t, evm, startConsumed, gasLimit, leftOverGas)
 }
 
+// withAlignSchedulerGas enables the scheduler-gas alignment knob for the
+// duration of the test and restores it on cleanup.
+func withAlignSchedulerGas(t *testing.T) {
+	t.Helper()
+	prev := AlignSchedulerGasWithExecutionTime
+	AlignSchedulerGasWithExecutionTime = true
+	t.Cleanup(func() { AlignSchedulerGasWithExecutionTime = prev })
+}
+
 func TestTopLevelGasProgressForNestedCreate2AddressCollision(t *testing.T) {
+	withAlignSchedulerGas(t)
 	initCode := mustDecodeHex(t, "60015060025060006000f3")
 	initOffset := byte(17)
 	parentCode := append(
@@ -809,6 +819,7 @@ func TestConsumeTopLevelGasConsumedAccumulatesWithExecutionGas(t *testing.T) {
 // SSTORE opcode charges its schedulerAccountingGas constant to the scheduler
 // clock rather than its full consensus dynamic cost.
 func TestExecutionWriteOpSSTOREChargesSchedulerAccountingGas(t *testing.T) {
+	withAlignSchedulerGas(t)
 	// PUSH1 1, PUSH1 0, SSTORE, STOP — sets storage[0] = 1.
 	code := []byte{0x60, 0x01, 0x60, 0x00, 0x55, 0x00}
 	statedb, evm, caller, contractAddr := newTestEVMWithCode(t, code, nil)
@@ -842,6 +853,7 @@ func TestExecutionWriteOpSSTOREChargesSchedulerAccountingGas(t *testing.T) {
 // charges only its constantGas to the scheduler clock; its dynamic gas (memory
 // expansion and initcode word cost) is excluded from topLevelGasConsumed.
 func TestExecutionWriteOpCREATEExcludesDynamicGas(t *testing.T) {
+	withAlignSchedulerGas(t)
 	// CREATE with non-empty initcode to force non-zero dynamic gas.
 	// initCode: STOP (1 byte). initOffset is placed at byte 15.
 	initCode := []byte{0x00}
@@ -877,4 +889,32 @@ func TestExecutionWriteOpCREATEExcludesDynamicGas(t *testing.T) {
 		"CREATE scheduler delta must not exceed consensus gas consumed")
 	require.Greater(t, topLevelDelta, uint64(0),
 		"CREATE scheduler delta must be positive")
+}
+
+// TestAlignSchedulerGasOffMatchesConsensusGasForStateWrite verifies the default
+// (knob-off) behavior: the executionWriteOp branch is dormant, so SSTORE and
+// other state-write opcodes charge their full consensus dynamic cost via
+// Contract.UseGas. As a result topLevelGasConsumed must exactly equal the
+// consensus gas consumed by the call — i.e. the scheduler clock during
+// execution mirrors the gas that ends up in the receipt's GasUsed.
+func TestAlignSchedulerGasOffMatchesConsensusGasForStateWrite(t *testing.T) {
+	require.Falsef(t, AlignSchedulerGasWithExecutionTime,
+		"this test exercises the default-off behavior; do not flip the knob")
+
+	// PUSH1 1, PUSH1 0, SSTORE, STOP — same code as the knob-on test so we
+	// can compare the two branches against the same workload.
+	code := []byte{0x60, 0x01, 0x60, 0x00, 0x55, 0x00}
+	statedb, evm, caller, contractAddr := newTestEVMWithCode(t, code, nil)
+	statedb.AddAddressToAccessList(caller)
+	statedb.AddAddressToAccessList(contractAddr)
+
+	const gasLimit = uint64(100_000)
+	startConsumed := evm.TopLevelGasConsumed()
+	_, leftOverGas, err := evm.Call(AccountRef(caller), contractAddr, nil, gasLimit, uint256.NewInt(0))
+	require.NoError(t, err)
+
+	gasConsumed := gasLimit - leftOverGas
+	topLevelDelta := evm.TopLevelGasConsumed() - startConsumed
+	require.Equal(t, gasConsumed, topLevelDelta,
+		"with AlignSchedulerGasWithExecutionTime=false, scheduler delta must equal consensus gas consumed (matches receipt GasUsed)")
 }

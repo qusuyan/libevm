@@ -220,7 +220,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 					return nil, ErrOutOfGas
 				}
 				in.evm.ConsumeTopLevelGas(dynamicCost - forwarded)
-			} else if operation.executionWriteOp {
+			} else if AlignSchedulerGasWithExecutionTime && operation.executionWriteOp {
 				if err != nil || !contract.TransferGas(dynamicCost) {
 					return nil, ErrOutOfGas
 				}

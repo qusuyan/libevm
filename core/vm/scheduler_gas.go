@@ -21,6 +21,21 @@ import (
 	"github.com/ava-labs/libevm/params"
 )
 
+// AlignSchedulerGasWithExecutionTime is a global configuration knob that opts
+// the libevm interpreter and downstream parallel executors into the
+// scheduler-gas alignment scheme. When false (default), scheduler gas during
+// EVM execution mirrors the consensus gas charged via Contract.UseGas (so the
+// per-transaction scheduler delta tracks the receipt's gasUsed) and validation
+// /commit phases add only a constant, fork-agnostic placeholder. When true,
+// state-write opcodes during execution charge schedulerAccountingGas instead
+// of their full dynamic cost, and validation/commit phases meter their own
+// state-access work via the helpers in this package.
+//
+// This variable is intended to be set once at program startup (before any EVM
+// is constructed) and read concurrently thereafter; toggling it mid-execution
+// is undefined.
+var AlignSchedulerGasWithExecutionTime = false
+
 // LookupSchedulerAccountingCost returns the total scheduler-accounting cost for
 // the given opcode under the supplied chain rules:
 //
@@ -34,10 +49,7 @@ func LookupSchedulerAccountingCost(rules params.Rules, op OpCode) (uint64, error
 	if entry == nil {
 		return 0, fmt.Errorf("opcode %v not present in instruction set for given rules", op)
 	}
-	if entry.schedulerAccountingGas == 0 {
-		return entry.constantGas, nil
-	}
-	return entry.schedulerAccountingGas, nil
+	return entry.constantGas + entry.schedulerAccountingGas, nil
 }
 
 // SchedulerKeccak256MemoryCost returns the KECCAK256 memory-expansion cost from

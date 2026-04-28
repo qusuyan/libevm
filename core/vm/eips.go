@@ -76,10 +76,10 @@ func enable1884(jt *JumpTable) {
 	jt[EXTCODEHASH].constantGas = params.ExtcodeHashGasEIP1884
 
 	jt[SSTORE].schedulerAccountingGas = params.SloadGasEIP1884
-	jt[CREATE].schedulerAccountingGas = params.SloadGasEIP1884
-	jt[SELFDESTRUCT].schedulerAccountingGas = params.SloadGasEIP1884
+	jt[CREATE].schedulerAccountingGas = 0
+	jt[SELFDESTRUCT].schedulerAccountingGas = 0
 	if jt[CREATE2] != nil {
-		jt[CREATE2].schedulerAccountingGas = params.SloadGasEIP1884
+		jt[CREATE2].schedulerAccountingGas = 0
 	}
 
 	// New opcode
@@ -122,11 +122,11 @@ func enable2200(jt *JumpTable) {
 	jt[SSTORE].dynamicGas = gasSStoreEIP2200
 	// Scheduler accounting: SSTORE set-new-slot cost is the representative
 	// upper bound for commit-time storage writes.
-	jt[SSTORE].schedulerAccountingGas = params.SloadGasEIP2200
-	jt[CREATE].schedulerAccountingGas = params.SloadGasEIP2200
-	jt[SELFDESTRUCT].schedulerAccountingGas = params.SloadGasEIP2200
+	jt[SSTORE].schedulerAccountingGas = params.SstoreSetGasEIP2200
+	jt[CREATE].schedulerAccountingGas = 0
+	jt[SELFDESTRUCT].schedulerAccountingGas = 0
 	if jt[CREATE2] != nil {
-		jt[CREATE2].schedulerAccountingGas = params.SloadGasEIP2200
+		jt[CREATE2].schedulerAccountingGas = 0
 	}
 }
 
@@ -144,11 +144,11 @@ func enable2929(jt *JumpTable) {
 	// Scheduler accounting: SSTORE set-new-slot cost reinstalled alongside the
 	// new dynamic gas function. Same value as EIP-2200 since we use a fixed
 	// representative cost for commit-time writes regardless of warm/cold status.
-	jt[SSTORE].schedulerAccountingGas = params.WarmStorageReadCostEIP2929
-	jt[CREATE].schedulerAccountingGas = params.WarmStorageReadCostEIP2929
-	jt[SELFDESTRUCT].schedulerAccountingGas = params.WarmStorageReadCostEIP2929
+	jt[SSTORE].schedulerAccountingGas = params.SstoreSetGasEIP2200
+	jt[CREATE].schedulerAccountingGas = 0
+	jt[SELFDESTRUCT].schedulerAccountingGas = 0
 	if jt[CREATE2] != nil {
-		jt[CREATE2].schedulerAccountingGas = params.WarmStorageReadCostEIP2929
+		jt[CREATE2].schedulerAccountingGas = 0
 	}
 
 	jt[EXTCODECOPY].constantGas = params.WarmStorageReadCostEIP2929
