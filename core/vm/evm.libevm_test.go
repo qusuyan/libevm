@@ -738,11 +738,31 @@ func TestTopLevelGasProgressForNestedCreate2AddressCollision(t *testing.T) {
 	require.NoError(t, err)
 
 	// CREATE2 is an executionWriteOp: its dynamic gas (keccak address-hash cost)
-	// is deducted from consensus gas but not added to topLevelGasConsumed. The
-	// scheduler delta is therefore strictly less than gasConsumed.
+	// is replaced by schedulerAccountingGas in topLevel. Re-run with alignment
+	// off to obtain the dynamic-inclusive baseline (topLevel == gasConsumed)
+	// and verify topLevel(aligned) = topLevel(off) - dynamic + schedulerAccountingGas.
 	gasConsumed := gasLimit - leftOverGas
 	topLevelDelta := evm.TopLevelGasConsumed() - startConsumed
-	require.LessOrEqual(t, topLevelDelta, gasConsumed, "scheduler delta must not exceed gas consumed")
+
+	AlignSchedulerGasWithExecutionTime = false
+	statedb2, evm2, caller2, contractAddr2 := newTestEVMWithCode(t, parentCode, nil)
+	statedb2.CreateAccount(collisionAddr)
+	statedb2.SetNonce(collisionAddr, 1)
+	start2 := evm2.TopLevelGasConsumed()
+	_, leftOverGas2, err := evm2.Call(AccountRef(caller2), contractAddr2, nil, gasLimit, uint256.NewInt(0))
+	require.NoError(t, err)
+	AlignSchedulerGasWithExecutionTime = true
+	gasConsumed2 := gasLimit - leftOverGas2
+	topLevel2 := evm2.TopLevelGasConsumed() - start2
+
+	require.Equal(t, gasConsumed, gasConsumed2,
+		"consensus gas must not depend on the scheduler-alignment knob")
+	require.Equal(t, gasConsumed2, topLevel2,
+		"with alignment off, topLevel must equal gasConsumed for the same program")
+	const create2SchedGas = uint64(4 * params.WarmStorageReadCostEIP2929)
+	create2Dynamic := topLevel2 - topLevelDelta + create2SchedGas
+	require.Equal(t, gasConsumed-create2Dynamic+create2SchedGas, topLevelDelta,
+		"aligned topLevel must equal gasConsumed minus CREATE2 dynamic gas plus schedulerAccountingGas")
 	require.Greater(t, topLevelDelta, uint64(0), "scheduler delta must be positive")
 }
 
@@ -836,11 +856,11 @@ func TestExecutionWriteOpSSTOREChargesSchedulerAccountingGas(t *testing.T) {
 	topLevelDelta := evm.TopLevelGasConsumed() - startConsumed
 
 	// 2×PUSH1 (3 gas each) contribute normally to both clocks.
-	// SSTORE contributes schedulerAccountingGas (= SstoreSetGas) to topLevel,
-	// not its larger consensus dynamic cost.
+	// SSTORE contributes schedulerAccountingGas (= 4*WarmStorageReadCostEIP2929)
+	// to topLevel, not its larger consensus dynamic cost.
 	const (
 		push1Gas       = uint64(3)
-		sstoreSchedGas = uint64(params.SstoreSetGas)
+		sstoreSchedGas = uint64(4 * params.WarmStorageReadCostEIP2929)
 	)
 	wantTopLevel := 2*push1Gas + sstoreSchedGas
 	require.Equal(t, wantTopLevel, topLevelDelta,
@@ -883,10 +903,29 @@ func TestExecutionWriteOpCREATEExcludesDynamicGas(t *testing.T) {
 	gasConsumed := gasLimit - leftOverGas
 	topLevelDelta := evm.TopLevelGasConsumed() - startConsumed
 
-	// topLevelDelta must be strictly less than gasConsumed because CREATE's
-	// dynamic gas is excluded from the scheduler clock (executionWriteOp=true).
-	require.LessOrEqual(t, topLevelDelta, gasConsumed,
-		"CREATE scheduler delta must not exceed consensus gas consumed")
+	// In aligned mode, CREATE's dynamic gas (memory expansion + initcode word
+	// cost) is excluded from topLevel and replaced by schedulerAccountingGas.
+	// So topLevelDelta differs from gasConsumed by exactly
+	// (schedulerAccountingGas - dynamicGas(CREATE)). Re-run with the alignment
+	// knob off to obtain the dynamic-inclusive baseline (where topLevel ==
+	// gasConsumed) and verify the delta.
+	AlignSchedulerGasWithExecutionTime = false
+	_, evm2, caller2, contractAddr2 := newTestEVMWithCode(t, parentCode, nil)
+	start2 := evm2.TopLevelGasConsumed()
+	_, leftOverGas2, err := evm2.Call(AccountRef(caller2), contractAddr2, nil, gasLimit, uint256.NewInt(0))
+	require.NoError(t, err)
+	AlignSchedulerGasWithExecutionTime = true
+	gasConsumed2 := gasLimit - leftOverGas2
+	topLevel2 := evm2.TopLevelGasConsumed() - start2
+
+	require.Equal(t, gasConsumed, gasConsumed2,
+		"consensus gas must not depend on the scheduler-alignment knob")
+	require.Equal(t, gasConsumed2, topLevel2,
+		"with alignment off, topLevel must equal gasConsumed for the same program")
+	const createSchedGas = uint64(4 * params.WarmStorageReadCostEIP2929)
+	createDynamic := topLevel2 - topLevelDelta + createSchedGas
+	require.Equal(t, gasConsumed-createDynamic+createSchedGas, topLevelDelta,
+		"aligned topLevel must equal gasConsumed minus CREATE dynamic gas plus schedulerAccountingGas")
 	require.Greater(t, topLevelDelta, uint64(0),
 		"CREATE scheduler delta must be positive")
 }

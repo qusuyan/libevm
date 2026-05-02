@@ -38,11 +38,14 @@ func TestLookupSchedulerAccountingCostSLOAD(t *testing.T) {
 }
 
 func TestLookupSchedulerAccountingCostSSTORE(t *testing.T) {
-	// Post-EIP-2929: SSTORE has schedulerAccountingGas=SstoreSetGasEIP2200=20000.
+	// Post-EIP-2929: SSTORE's exec-time work is an in-memory journal entry,
+	// priced at 4x a warm SLOAD's read cost (4*WarmStorageReadCostEIP2929=400)
+	// to reflect that map writes are slower than reads. The trie write is
+	// deferred to commit/writeback and accounted for there.
 	berlinRules := params.Rules{IsEIP150: true, IsEIP158: true, IsHomestead: true, IsByzantium: true, IsConstantinople: true, IsIstanbul: true, IsBerlin: true}
 	cost, err := LookupSchedulerAccountingCost(berlinRules, SSTORE)
 	require.NoError(t, err)
-	require.Equal(t, params.SstoreSetGasEIP2200, cost, "Berlin SSTORE scheduler accounting cost")
+	require.Equal(t, 4*params.WarmStorageReadCostEIP2929, cost, "Berlin SSTORE scheduler accounting cost")
 }
 
 func TestLookupSchedulerAccountingCostLOG(t *testing.T) {
@@ -67,15 +70,20 @@ func TestLookupSchedulerAccountingCostCREATE(t *testing.T) {
 	berlinRules := params.Rules{IsEIP150: true, IsEIP158: true, IsHomestead: true, IsByzantium: true, IsConstantinople: true, IsIstanbul: true, IsBerlin: true}
 	cost, err := LookupSchedulerAccountingCost(berlinRules, CREATE)
 	require.NoError(t, err)
-	require.Equal(t, params.CreateGas, cost, "CREATE scheduler accounting cost")
+	// CREATE: constantGas=CreateGas (consensus, charged via Contract.UseGas) plus
+	// schedulerAccountingGas=4*WarmStorageReadCostEIP2929 covering the in-memory
+	// journal entry for the new account, priced at 4x a warm read.
+	require.Equal(t, params.CreateGas+4*params.WarmStorageReadCostEIP2929, cost, "CREATE scheduler accounting cost")
 }
 
 func TestLookupSchedulerAccountingCostSELFDESTRUCT(t *testing.T) {
 	berlinRules := params.Rules{IsEIP150: true, IsEIP158: true, IsHomestead: true, IsByzantium: true, IsConstantinople: true, IsIstanbul: true, IsBerlin: true}
 	cost, err := LookupSchedulerAccountingCost(berlinRules, SELFDESTRUCT)
 	require.NoError(t, err)
-	// SELFDESTRUCT constantGas = params.SelfdestructGasEIP150 = 5000 (set in enable2929/tangerine)
-	require.Equal(t, uint64(5000), cost, "Berlin SELFDESTRUCT scheduler accounting cost")
+	// SELFDESTRUCT: constantGas=SelfdestructGasEIP150 (5000) plus
+	// schedulerAccountingGas=4*WarmStorageReadCostEIP2929 for the in-memory
+	// destruct journal entry, priced at 4x a warm read.
+	require.Equal(t, params.SelfdestructGasEIP150+4*params.WarmStorageReadCostEIP2929, cost, "Berlin SELFDESTRUCT scheduler accounting cost")
 }
 
 func TestLookupSchedulerAccountingCostZeroForNonStateOpcodes(t *testing.T) {

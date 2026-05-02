@@ -183,7 +183,7 @@ func newConstantinopleInstructionSet() JumpTable {
 	instructionSet[CREATE2] = &operation{
 		execute:                opCreate2,
 		constantGas:            params.Create2Gas,
-		schedulerAccountingGas: params.SloadGasFrontier,
+		schedulerAccountingGas: 4 * params.SloadGasFrontier,
 		dynamicGas:             gasCreate2,
 		executionWriteOp:       true,
 		minStack:               minStack(4, 1),
@@ -573,7 +573,7 @@ func newFrontierInstructionSet() JumpTable {
 		SSTORE: {
 			execute:                opSstore,
 			dynamicGas:             gasSStore,
-			schedulerAccountingGas: params.SloadGasFrontier,
+			schedulerAccountingGas: 4 * params.SloadGasFrontier,
 			executionWriteOp:       true,
 			minStack:               minStack(2, 0),
 			maxStack:               maxStack(2, 0),
@@ -1042,7 +1042,7 @@ func newFrontierInstructionSet() JumpTable {
 			execute:                opCreate,
 			constantGas:            params.CreateGas,
 			dynamicGas:             gasCreate,
-			schedulerAccountingGas: params.SloadGasFrontier,
+			schedulerAccountingGas: 4 * params.SloadGasFrontier,
 			executionWriteOp:       true,
 			minStack:               minStack(3, 1),
 			maxStack:               maxStack(3, 1),
@@ -1074,7 +1074,7 @@ func newFrontierInstructionSet() JumpTable {
 		SELFDESTRUCT: {
 			execute:                opSelfdestruct,
 			dynamicGas:             gasSelfdestruct,
-			schedulerAccountingGas: params.SloadGasFrontier,
+			schedulerAccountingGas: 4 * params.SloadGasFrontier,
 			executionWriteOp:       true,
 			minStack:               minStack(1, 0),
 			maxStack:               maxStack(1, 0),

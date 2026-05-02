@@ -75,11 +75,15 @@ func enable1884(jt *JumpTable) {
 	jt[BALANCE].constantGas = params.BalanceGasEIP1884
 	jt[EXTCODEHASH].constantGas = params.ExtcodeHashGasEIP1884
 
-	jt[SSTORE].schedulerAccountingGas = params.SloadGasEIP1884
-	jt[CREATE].schedulerAccountingGas = 0
-	jt[SELFDESTRUCT].schedulerAccountingGas = 0
+	// Scheduler accounting: state-write opcodes do only in-memory work during
+	// execution (journal entry into the per-tx write set); the trie write happens
+	// later at commit/writeback. Price them at 4x SLOAD's in-memory read cost
+	// to reflect the higher cost of map writes versus reads.
+	jt[SSTORE].schedulerAccountingGas = 4 * params.SloadGasEIP1884
+	jt[CREATE].schedulerAccountingGas = 4 * params.SloadGasEIP1884
+	jt[SELFDESTRUCT].schedulerAccountingGas = 4 * params.SloadGasEIP1884
 	if jt[CREATE2] != nil {
-		jt[CREATE2].schedulerAccountingGas = 0
+		jt[CREATE2].schedulerAccountingGas = 4 * params.SloadGasEIP1884
 	}
 
 	// New opcode
@@ -120,13 +124,15 @@ func opChainID(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 func enable2200(jt *JumpTable) {
 	jt[SLOAD].constantGas = params.SloadGasEIP2200
 	jt[SSTORE].dynamicGas = gasSStoreEIP2200
-	// Scheduler accounting: SSTORE set-new-slot cost is the representative
-	// upper bound for commit-time storage writes.
-	jt[SSTORE].schedulerAccountingGas = params.SstoreSetGasEIP2200
-	jt[CREATE].schedulerAccountingGas = 0
-	jt[SELFDESTRUCT].schedulerAccountingGas = 0
+	// Scheduler accounting: state-write opcodes do only in-memory work during
+	// execution (journal entry into the per-tx write set); the trie write happens
+	// later at commit/writeback. Price them at 4x SLOAD's in-memory read cost
+	// to reflect the higher cost of map writes versus reads.
+	jt[SSTORE].schedulerAccountingGas = 4 * params.SloadGasEIP2200
+	jt[CREATE].schedulerAccountingGas = 4 * params.SloadGasEIP2200
+	jt[SELFDESTRUCT].schedulerAccountingGas = 4 * params.SloadGasEIP2200
 	if jt[CREATE2] != nil {
-		jt[CREATE2].schedulerAccountingGas = 0
+		jt[CREATE2].schedulerAccountingGas = 4 * params.SloadGasEIP2200
 	}
 }
 
@@ -141,14 +147,15 @@ func enable2929(jt *JumpTable) {
 	// accessed during execution, so it is a warm read. Use the warm storage
 	// read cost as the state-independent accounting substitute.
 	jt[SLOAD].schedulerAccountingGas = params.WarmStorageReadCostEIP2929
-	// Scheduler accounting: SSTORE set-new-slot cost reinstalled alongside the
-	// new dynamic gas function. Same value as EIP-2200 since we use a fixed
-	// representative cost for commit-time writes regardless of warm/cold status.
-	jt[SSTORE].schedulerAccountingGas = params.SstoreSetGasEIP2200
-	jt[CREATE].schedulerAccountingGas = 0
-	jt[SELFDESTRUCT].schedulerAccountingGas = 0
+	// Scheduler accounting: state-write opcodes do only in-memory work during
+	// execution (journal entry into the per-tx write set); the trie write happens
+	// later at commit/writeback. Price them at 4x a warm SLOAD's in-memory read
+	// cost to reflect the higher cost of map writes versus reads.
+	jt[SSTORE].schedulerAccountingGas = 4 * params.WarmStorageReadCostEIP2929
+	jt[CREATE].schedulerAccountingGas = 4 * params.WarmStorageReadCostEIP2929
+	jt[SELFDESTRUCT].schedulerAccountingGas = 4 * params.WarmStorageReadCostEIP2929
 	if jt[CREATE2] != nil {
-		jt[CREATE2].schedulerAccountingGas = 0
+		jt[CREATE2].schedulerAccountingGas = 4 * params.WarmStorageReadCostEIP2929
 	}
 
 	jt[EXTCODECOPY].constantGas = params.WarmStorageReadCostEIP2929
@@ -175,9 +182,9 @@ func enable2929(jt *JumpTable) {
 	jt[DELEGATECALL].constantGas = params.WarmStorageReadCostEIP2929
 	jt[DELEGATECALL].dynamicGas = gasDelegateCallEIP2929
 
-	// This was previously part of the dynamic cost, but we're using it as a constantGas
-	// factor here. Scheduler accounting: the base selfdestruct cost is already
-	// captured in constantGas, so schedulerAccountingGas stays 0.
+	// SelfdestructGasEIP150 was previously part of the dynamic cost; we're now
+	// using it as a constantGas factor. The schedulerAccountingGas was set
+	// above (matching SLOAD's warm-read cost) for the in-memory journal entry.
 	jt[SELFDESTRUCT].constantGas = params.SelfdestructGasEIP150
 	jt[SELFDESTRUCT].dynamicGas = gasSelfdestructEIP2929
 }
@@ -188,8 +195,8 @@ func enable2929(jt *JumpTable) {
 // - Reduces max refunds to 20% gas
 func enable3529(jt *JumpTable) {
 	jt[SSTORE].dynamicGas = gasSStoreEIP3529
-	// Scheduler accounting stays the same across refund-policy changes.
-	// jt[SSTORE].schedulerAccountingGas = params.SstoreSetGasEIP2200
+	// Scheduler accounting stays the same across refund-policy changes
+	// (still params.WarmStorageReadCostEIP2929 from enable2929).
 	jt[SELFDESTRUCT].dynamicGas = gasSelfdestructEIP3529
 }
 
@@ -343,10 +350,13 @@ func enable7516(jt *JumpTable) {
 // enable6780 applies EIP-6780 (deactivate SELFDESTRUCT)
 func enable6780(jt *JumpTable) {
 	jt[SELFDESTRUCT] = &operation{
-		execute:                opSelfdestruct6780,
-		dynamicGas:             gasSelfdestructEIP3529,
-		constantGas:            params.SelfdestructGasEIP150,
-		schedulerAccountingGas: params.SloadGasFrontier,
+		execute:     opSelfdestruct6780,
+		dynamicGas:  gasSelfdestructEIP3529,
+		constantGas: params.SelfdestructGasEIP150,
+		// Scheduler accounting: like other state-write opcodes, the exec-time
+		// work is just an in-memory journal entry; trie work happens at commit.
+		// Price at 4x a warm SLOAD's in-memory read cost.
+		schedulerAccountingGas: 4 * params.WarmStorageReadCostEIP2929,
 		executionWriteOp:       true,
 		minStack:               minStack(1, 0),
 		maxStack:               maxStack(1, 0),
