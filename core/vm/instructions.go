@@ -667,6 +667,7 @@ func opCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byt
 	}
 	if !value.IsZero() {
 		gas += params.CallStipend
+		interpreter.evm.valueTransferCallStipendCount++
 	}
 	ret, returnGas, err := interpreter.evm.Call(scope.Contract, toAddr, args, gas, &value)
 
@@ -699,6 +700,7 @@ func opCallCode(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([
 
 	if !value.IsZero() {
 		gas += params.CallStipend
+		interpreter.evm.valueTransferCallStipendCount++
 	}
 
 	ret, returnGas, err := interpreter.evm.CallCode(scope.Contract, toAddr, args, gas, &value)

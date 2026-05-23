@@ -142,3 +142,14 @@ func (evm *EVM) ConsumeTopLevelGas(gas uint64) {
 	}
 	evm.topLevelGasConsumed.Add(gas)
 }
+
+// ValueTransferCallStipendCount reports how many times a value-transferring
+// CALL / CALLCODE has injected params.CallStipend (2300 free gas) into a child
+// frame. The stipend is added to the child's local gas pool, so the child's
+// UseGas calls inflate TopLevelGasConsumed by up to 2300 per stipend even
+// though the parent never pays the stipend. Callers that need to reconcile
+// TopLevelGasConsumed against receipt.GasUsed (e.g. policy schedulers) can use
+// this counter to compute the inflation.
+func (evm *EVM) ValueTransferCallStipendCount() uint64 {
+	return evm.valueTransferCallStipendCount
+}

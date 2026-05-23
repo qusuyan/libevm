@@ -133,8 +133,16 @@ type EVM struct {
 	// Only this atomic field is intended to be read concurrently; the rest of
 	// the EVM remains single-threaded and is not generally thread safe.
 	// topLevelGasConsumed is cumulative across every top-level run executed by
-	// this EVM instance.
+	// this EVM instance and never decreases.
 	topLevelGasConsumed atomic.Uint64
+
+	// valueTransferCallStipendCount counts the number of times opCall /
+	// opCallCode injected params.CallStipend (2300) into the child frame.
+	// The stipend gas is "free" — the parent never pays for it — but the
+	// child's UseGas calls still flow through topLevelGasConsumed, so this
+	// counter is exposed for callers (e.g. the prebuilt-schedule scheduler)
+	// to reconcile receipt.GasUsed against TopLevelGasConsumed.
+	valueTransferCallStipendCount uint64
 
 	// libevm
 	executionInvalidated error // see [EVM.InvalidateExecution]
