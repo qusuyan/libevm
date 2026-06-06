@@ -17,6 +17,8 @@
 package vm
 
 import (
+	"sync/atomic"
+
 	"github.com/holiman/uint256"
 
 	"github.com/ava-labs/libevm/common"
@@ -123,24 +125,94 @@ func (evm *EVM) beginTopLevelGasTracking(_ uint64) {
 
 func (evm *EVM) endTopLevelGasTracking() {
 	evm.forwardedCallGas = 0
+	// Drain the worker-local gas batch so post-run reads of the shared counter
+	// (e.g. the scheduler's execution-completion position) observe the exact total.
+	evm.topLevelGasConsumed.flush()
 }
 
 func (evm *EVM) resetTopLevelGasTrackingWindow() {
 	evm.forwardedCallGas = 0
+	evm.topLevelGasConsumed.flush()
 }
 
 // TopLevelGasConsumed returns the cumulative monotonic post-preprocessing gas
 // consumed across all top-level runs executed by this EVM. This includes gas
 // consumed by nested calls and persists across Reset().
+//
+// It returns the shared (cross-worker-visible) counter, which a worker's own
+// in-flight UseGas batches into only at the worker-local flush threshold and at
+// the end of each top-level run. Reads performed BETWEEN top-level runs (the
+// only time a peer scheduler samples another worker, and the only time the
+// owning worker samples itself for position bookkeeping) therefore observe the
+// exact total; a concurrent sampler observing a peer mid-run may lag by up to
+// schedulerGasFlushThreshold gas, which is acceptable for the gas-ordering
+// signal and is the point of the batching (see topLevelGasTracker).
 func (evm *EVM) TopLevelGasConsumed() uint64 {
-	return evm.topLevelGasConsumed.Load()
+	return evm.topLevelGasConsumed.load()
 }
 
 func (evm *EVM) ConsumeTopLevelGas(gas uint64) {
+	// Validation/commit charges happen outside the hot per-opcode loop, so add
+	// them straight to the shared counter (flushing any pending local first).
+	evm.topLevelGasConsumed.addShared(gas)
+}
+
+const (
+	// schedulerGasFlushThreshold is the worker-local gas a worker accumulates
+	// before flushing it into the shared, cross-worker-visible counter. Batching
+	// the high-frequency per-opcode updates this way cuts the cache-coherence
+	// traffic created by schedulers that spin-read the shared counter.
+	schedulerGasFlushThreshold = 2000
+	cacheLineBytes             = 64
+)
+
+// topLevelGasTracker accumulates a worker EVM's cumulative scheduler-accounting
+// gas. `shared` is sampled concurrently by OTHER workers' schedulers (the
+// gas-ordering signal); `local` is private to the owning worker's goroutine and
+// flushed into `shared` in batches — every schedulerGasFlushThreshold gas and at
+// the end of each top-level run. `shared` is isolated on its own cache line by
+// the surrounding padding so the owning worker's frequent `local` writes (and
+// any neighbouring EVM field) never invalidate the line that peer workers read.
+type topLevelGasTracker struct {
+	_      [cacheLineBytes]byte
+	shared atomic.Uint64
+	_      [cacheLineBytes - 8]byte
+	local  uint64
+}
+
+// add accumulates worker-local gas, flushing to the shared counter only once the
+// local batch reaches the threshold. Called from the hot per-opcode path.
+func (t *topLevelGasTracker) add(gas uint64) {
 	if gas == 0 {
 		return
 	}
-	evm.topLevelGasConsumed.Add(gas)
+	t.local += gas
+	if t.local >= schedulerGasFlushThreshold {
+		t.shared.Add(t.local)
+		t.local = 0
+	}
+}
+
+// addShared flushes any pending local batch then adds directly to the shared
+// counter. For infrequent charges that occur outside the hot loop.
+func (t *topLevelGasTracker) addShared(gas uint64) {
+	t.flush()
+	if gas != 0 {
+		t.shared.Add(gas)
+	}
+}
+
+// flush drains the worker-local batch into the shared counter. Called at the end
+// of each top-level run so post-run reads of the shared counter are exact.
+func (t *topLevelGasTracker) flush() {
+	if t.local != 0 {
+		t.shared.Add(t.local)
+		t.local = 0
+	}
+}
+
+func (t *topLevelGasTracker) load() uint64 {
+	return t.shared.Load()
 }
 
 // ValueTransferCallStipendCount reports how many times a value-transferring

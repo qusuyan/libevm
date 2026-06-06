@@ -17,8 +17,6 @@
 package vm
 
 import (
-	"sync/atomic"
-
 	"github.com/ava-labs/libevm/common"
 	"github.com/holiman/uint256"
 )
@@ -61,7 +59,7 @@ type Contract struct {
 	Gas   uint64
 	value *uint256.Int
 
-	topLevelGasConsumed *atomic.Uint64
+	topLevelGasConsumed *topLevelGasTracker
 }
 
 // NewContract returns a new contract environment for the execution of EVM.
@@ -169,7 +167,7 @@ func (c *Contract) UseGas(gas uint64) (ok bool) {
 	}
 	c.Gas -= gas
 	if c.topLevelGasConsumed != nil {
-		c.topLevelGasConsumed.Add(gas)
+		c.topLevelGasConsumed.add(gas)
 	}
 	return true
 }
@@ -190,7 +188,7 @@ func (c *Contract) ReturnGas(gas uint64) {
 	c.Gas += gas
 }
 
-func (c *Contract) attachTopLevelGasTracker(consumed *atomic.Uint64) {
+func (c *Contract) attachTopLevelGasTracker(consumed *topLevelGasTracker) {
 	c.topLevelGasConsumed = consumed
 }
 

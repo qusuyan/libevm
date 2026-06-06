@@ -130,11 +130,13 @@ type EVM struct {
 	forwardedCallGas uint64
 
 	// Top-level gas progress is sampled concurrently by the parallel executor.
-	// Only this atomic field is intended to be read concurrently; the rest of
-	// the EVM remains single-threaded and is not generally thread safe.
-	// topLevelGasConsumed is cumulative across every top-level run executed by
-	// this EVM instance and never decreases.
-	topLevelGasConsumed atomic.Uint64
+	// Only the tracker's shared counter is intended to be read concurrently; the
+	// rest of the EVM remains single-threaded and is not generally thread safe.
+	// It is cumulative across every top-level run executed by this EVM instance
+	// and never decreases. The tracker batches the hot per-opcode updates into a
+	// worker-local accumulator and keeps the shared counter on its own cache line
+	// (see topLevelGasTracker).
+	topLevelGasConsumed topLevelGasTracker
 
 	// valueTransferCallStipendCount counts the number of times opCall /
 	// opCallCode injected params.CallStipend (2300) into the child frame.

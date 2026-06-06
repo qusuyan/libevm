@@ -231,20 +231,22 @@ func assertTopLevelGasTrace(t *testing.T, tracer *topLevelGasTracer, childDepth 
 	require.NotEmpty(t, tracer.consumed)
 
 	childSamples := 0
-	childProgress := false
 	for i, consumed := range tracer.consumed {
 		if i > 0 {
 			require.GreaterOrEqualf(t, consumed, tracer.consumed[i-1], "expected monotonic consumed gas at sample %d", i)
 		}
 		if tracer.depths[i] == childDepth {
 			childSamples++
-			if i > 0 && consumed > tracer.consumed[i-1] {
-				childProgress = true
-			}
 		}
 	}
 	require.NotZero(t, childSamples, "expected tracer samples from nested execution")
-	require.True(t, childProgress, "expected accumulated consumed gas to advance during nested execution")
+	// Note: per-opcode progress is NOT asserted here. Worker gas is now batched
+	// into a worker-local accumulator and flushed into the shared counter only
+	// every schedulerGasFlushThreshold gas and at the end of each top-level run
+	// (see topLevelGasTracker). The opcode tracer samples mid-run, before the
+	// final flush, so a small nested frame may show no intra-frame advance. That
+	// the nested frame's gas IS counted is verified exactly post-run by
+	// assertTopLevelRunDelta.
 }
 
 func assertTopLevelRunDelta(t *testing.T, evm *EVM, startConsumed, gasLimit, leftOverGas uint64) {
